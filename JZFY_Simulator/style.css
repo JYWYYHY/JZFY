@@ -1,0 +1,56 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Microsoft YaHei', sans-serif; background: #121212; color: #e0e0e0; padding: 20px; height: 100vh; display: flex; flex-direction: column; }
+.header { display: flex; justify-content: space-between; align-items: center; background: #1e1e1e; padding: 15px 25px; border-radius: 10px; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+.mode-tabs { display: flex; gap: 10px; background: #252525; padding: 5px; border-radius: 8px; }
+.mode-tab { padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold; color: #888; transition: 0.2s; user-select: none;}
+.mode-tab.active { background: #2196f3; color: white; }
+.controls { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+.team-select { padding: 5px 10px; border-radius: 5px; display: flex; gap: 10px; background: #252525; align-items: center;}
+.team-select.red { border-left: 3px solid #f44336; }
+.team-select.blue { border-left: 3px solid #2196f3; }
+select { padding: 5px; border-radius: 4px; background: #333; color: #fff; border: 1px solid #555; }
+input[type="number"] { padding: 5px; border-radius: 4px; background: #333; color: #fff; border: 1px solid #555; }
+button { padding: 8px 16px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
+.btn-start { background: #4caf50; color: white; }
+.btn-reset { background: #f44336; color: white; }
+
+.container { display: flex; gap: 20px; flex: 1; overflow: hidden; }
+.panel { background: #1e1e1e; padding: 20px; border-radius: 10px; display: flex; flex-direction: column; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+.panel h2 { font-size: 16px; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; color: #aaa; }
+
+.team-stats { padding: 15px; border-radius: 8px; margin-bottom: 15px; background: #252525; }
+.red-team { border-left: 5px solid #f44336; }
+.blue-team { border-left: 5px solid #2196f3; }
+.team-header { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; color: #bbb; }
+.chars-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.char-card { background: #2c2c2c; padding: 10px; border-radius: 6px; font-size: 12px; border: 1px solid #3a3a3a; position: relative; overflow: hidden; transition: 0.2s;}
+.char-card.dead { opacity: 0.4; text-align: center; color: #888;}
+.char-card.active-turn { border-color: #ffeb3b; box-shadow: 0 0 10px rgba(255,235,59,0.3); }
+.char-name { font-weight: bold; color: #fff; margin-bottom: 4px; }
+.char-hp { color: #ff8a80; font-weight: bold; }
+.char-buff { color: #ffeb3b; font-size: 11px; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px;}
+.tag { background: #444; padding: 1px 4px; border-radius: 3px; font-size: 10px;}
+
+.skill-buttons { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.skill-btn { padding: 5px 8px; font-size: 11px; background: #3a3a3a; color: #ccc; border: 1px solid #555; border-radius: 4px; cursor: pointer; text-align: left;}
+.skill-btn:hover { background: #4caf50; color: white; }
+
+.stats-dashboard { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-bottom: 15px; }
+.stat-box { background: #252525; padding: 10px; border-radius: 8px; text-align: center; border: 1px solid #333; }
+.stat-box.highlight { background: #2a1b1b; border-color: #f4433655; display: flex; align-items: center; justify-content: center;}
+.stat-val { font-size: 20px; font-weight: bold; color: #ff5252; }
+.stat-label { font-size: 12px; color: #888; }
+.table-wrapper { background: #252525; border-radius: 8px; overflow: hidden; margin-bottom: 15px; border: 1px solid #333; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: center; }
+th, td { padding: 8px; border-bottom: 1px solid #333; }
+th { background: #1a1a1a; color: #aaa; }
+.td-red { color: #ff8a80; font-weight: bold; }
+.td-blue { color: #82b1ff; font-weight: bold; }
+.log-window { background: #090909; color: #d4d4d4; padding: 15px; font-family: 'Consolas', monospace; flex: 1; overflow-y: scroll; border-radius: 8px; font-size: 13px; line-height: 1.5; border: 1px solid #222; }
+.log-turn { color: #569cd6; font-weight: bold; margin-top: 10px; border-bottom: 1px dashed #569cd6; }
+.log-dmg { color: #f44747; }
+.log-heal { color: #4ec9b0; }
+.log-buff { color: #dcdcaa; }
+.log-death { color: #ce9178; background: #3e1212; padding: 2px 4px; border-radius: 3px;}
+.log-system { color: #888; font-style: italic; }
+.log-special { color: #c586c0; font-weight: bold; }

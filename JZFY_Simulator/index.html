@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>九中风云 - 机制测试与数值平衡系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>⚔️ 九中风云 - 模拟器</h1>
+        <div class="mode-tabs">
+            <div class="mode-tab active" onclick="switchMode('auto')">3v3 自动战斗</div>
+            <div class="mode-tab" onclick="switchMode('manual')">手动打木桩</div>
+        </div>
+
+        <!-- 自动战斗控制栏 -->
+        <div class="controls" id="auto-controls">
+            <div class="team-select red">
+                <label>红1: <select id="p1-c1"></select></label>
+                <label>红2: <select id="p1-c2"></select></label>
+                <label>红3: <select id="p1-c3"></select></label>
+            </div>
+            <div class="team-select blue">
+                <label>蓝1: <select id="p2-c1"></select></label>
+                <label>蓝2: <select id="p2-c2"></select></label>
+                <label>蓝3: <select id="p2-c3"></select></label>
+            </div>
+            <button id="btn-start" class="btn-start">▶ 开始自动战斗</button>
+            <button id="btn-pause" class="btn-start" style="background:#ff9800; display:none;">⏸ 暂停</button>
+            <label style="color:#ccc; font-size:12px;">次数: <input type="number" id="batch-rounds" value="100" min="1" max="1000" style="width:60px;"></label>
+            <label style="color:#ccc; font-size:12px;">种子: <input type="number" id="batch-seed" placeholder="随机" style="width:90px;"></label>
+            <button id="btn-batch" class="btn-start" style="background:#00bcd4;">📊 批量模拟</button>
+        </div>
+
+        <!-- 手动模式控制栏 -->
+        <div class="controls" id="manual-controls" style="display:none;">
+            <div class="team-select red">
+                <label>玩家1: <select id="m-c1"></select></label>
+                <label>玩家2: <select id="m-c2"></select></label>
+                <label>玩家3: <select id="m-c3"></select></label>
+            </div>
+            <div class="team-select blue">
+                <label>木桩数量: <input type="number" id="dummy-count" value="1" min="1" max="3" style="width:50px;"></label>
+                <label>木桩血量: <input type="number" id="dummy-hp" value="9999" style="width:70px;"></label>
+            </div>
+            <button id="btn-manual-start" class="btn-start" style="background:#9c27b0;">▶ 开始测试</button>
+            <button id="btn-apply-dummy" class="btn-start" style="background:#ff9800;">🔧 应用木桩设置</button>
+            <button id="btn-reset-stats" class="btn-start" style="background:#607d8b;">🔄 重置统计</button>
+        </div>
+
+        <button id="btn-reset" class="btn-reset">重置</button>
+    </div>
+
+    <div class="container">
+        <div class="panel" style="flex: 1;">
+            <h2 id="panel-title">实时状态</h2>
+            <div class="team-stats red-team">
+                <div class="team-header">
+                    <strong>红方 / 玩家</strong>
+                    <span>❤️ 心数: <b id="p1-hearts">5</b> | ✨ 技能点: <b id="p1-sp">3</b>/5</span>
+                </div>
+                <div id="p1-chars" class="chars-grid"></div>
+            </div>
+            <div class="team-stats blue-team">
+                <div class="team-header">
+                    <strong>蓝方 / 木桩</strong>
+                    <span>❤️ 心数: <b id="p2-hearts">5</b></span>
+                </div>
+                <div id="p2-chars" class="chars-grid"></div>
+            </div>
+        </div>
+
+        <div class="panel" style="flex: 1.4;">
+            <h2>数据统计 & 战斗日志</h2>
+            <div class="stats-dashboard">
+                <div class="stat-box">
+                    <div class="stat-val" id="stat-turns">0</div>
+                    <div class="stat-label">总回合数</div>
+                </div>
+                <div class="stat-box highlight">
+                    <div class="stat-val" id="stat-winner" style="font-size: 16px;">准备中</div>
+                    <div class="stat-label">测试状态</div>
+                </div>
+            </div>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>阵营</th><th>角色</th><th>总伤害</th><th>DPS</th><th>死亡次数</th><th>大招频率</th></tr>
+                    </thead>
+                    <tbody id="stats-body">
+                        <tr><td colspan="6" style="text-align:center; color:#888;">等待数据...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="log" class="log-window">等待模拟开始...</div>
+        </div>
+    </div>
+
+<!-- 加载顺序：registry → 各角色 → data → effect-handlers → engine → main -->
+<script src="character-registry.js"></script>
+
+<script src="characters/gge.js"></script>
+<script src="characters/jitang.js"></script>
+<script src="characters/luokong.js"></script>
+<script src="characters/dunzi.js"></script>
+<script src="characters/sujin.js"></script>
+<script src="characters/lingyi.js"></script>
+<script src="characters/bichunhan.js"></script>
+<script src="characters/taotao.js"></script>
+
+<script src="data.js"></script>
+<script src="effect-handlers.js"></script>
+<script src="engine.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

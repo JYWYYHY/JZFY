@@ -1,0 +1,76 @@
+CharacterRegistry.register({
+    id: "luokong",
+    name: "落空",
+    hp: 60,
+    atk: 4,
+
+    skills: [
+        {
+            name: "普攻", cost: -1,
+            effects: [{ type: "damage", ratio: 0.5, target: "enemyTeam" }]
+        },
+        {
+            name: "希冀", cost: 1,
+            effects: [{ type: "custom", hook: "xiJi" }]
+        },
+        {
+            name: "宝贝回家", cost: 1,
+            effects: [
+                { type: "damage", ratio: 0.5, target: "single" },
+                { type: "custom", hook: "darkRoom" }
+            ]
+        },
+        {
+            name: "我们三个", cost: 0, isUltimate: true,
+            ultimateCondition: { type: "custom", hook: "canUltimate" },
+            effects: [{ type: "custom", hook: "yaoQi" }]
+        }
+    ],
+
+    hooks: {
+        canUltimate(ctx) {
+            return ctx.actor.shuaiQi >= 15;
+        },
+        xiJi(ctx) {
+            const { actor, myTeam, log } = ctx;
+            const ally = myTeam.getAliveChars().sort((a, b) => a.hp - b.hp)[0];
+            if (!ally) return;
+            const before = ally.xiJiStacks;
+            ally.xiJiStacks = Math.min(2, before + 2);
+            ally.atk += (ally.xiJiStacks - before) * 2;
+            log(`[落空] 为 ${ally.name} 施加 [希冀]（${ally.xiJiStacks}层，ATK+${2 * ally.xiJiStacks}）`, "buff");
+        },
+        darkRoom(ctx) {
+            const { actor, target, log } = ctx;
+            if (!target) return;
+            target.darkRoomTurns = 2;
+            target.darkRoomSource = actor;
+            target.darkRoomDmgTaken = 0;
+            log(`[落空] ${target.name} 进入小黑屋（受伤+15%，2回合）`, "special");
+        },
+        onDarkRoomClear(ctx) {
+            const { engine, char, target, dmgTaken, log } = ctx;
+            const heal = Math.round(dmgTaken * 0.1);
+            if (heal > 0) {
+                const team = engine._findTeamOf(char);
+                team.getAliveChars().forEach(a => a.hp = Math.min(a.maxHp, a.hp + heal));
+                log(`[落空] 小黑屋清除，全队回复 ${heal} 点生命。`, "heal");
+            }
+            char.shuaiQi += 5;
+        },
+        yaoQi(ctx) {
+            const { actor, myTeam, log } = ctx;
+            actor.shuaiQi = 0;
+            myTeam.getAliveChars().forEach(c => { c.buffWoYe = 2; });
+            log(`[落空] 消耗15点耍起，全队获得[我也要玩]！`, "special");
+        },
+        onAllyConsumedXiJi(ctx) {
+            ctx.char.shuaiQi += 2;
+        },
+        onDeath(ctx) {
+            const { team, log } = ctx;
+            team.getAliveChars().forEach(c => { c.buffTurns = Math.max(c.buffTurns, 2); });
+            log(`[落空] 阵亡触发被动[我相信你]，全队获得10%减伤持续2回合。`, "special");
+        }
+    }
+});
