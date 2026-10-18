@@ -4,6 +4,7 @@
  *   · 技能效果统一交给 runEffects 分发
  *   · 角色特有机制挂在 character.hooks 上
  *   · 被动挂在 character.passives 上
+ *   · 支持真伤、onDamageDealt、handleDeath 返回值、剪云机制
  * ============================================================ */
 
 class Character {
@@ -64,6 +65,17 @@ class Character {
         this._dmgTaken = 0;
         this.ultUsed = false;
 
+        // ---- 鸡汤（大招历史） ----
+        this.soupHistory = {};
+        this.lastUltDmg = 0;
+
+        // ---- 剪云 ----
+        this.jianyunFragments = 0;
+        this.adminPrivilege = 0;
+        this.xinYueTurns = 0;
+        this.marked = false;
+        this.offFieldTurns = 0;
+
         this.stats = { totalDmg: 0, deaths: 0, ults: 0, turnsAlive: 0 };
     }
 }
@@ -79,6 +91,7 @@ class Team {
     reset() {
         this.chars.forEach(c => c.reset());
         this.hearts = 5;
+        this.errorHearts = 0;   // 剪云污染心计数
         this.skillPoints = 3;
     }
     getAliveEnemies(enemyTeam) { return enemyTeam.chars.filter(c => !c.isDead); }
@@ -95,12 +108,13 @@ class AutoEngine {
         this.onEnd = null;
         this.interval = null;
 
-        // ---- 随机种子 ----
-        this._seed = null;      // null = 使用 Math.random()
+        this._seed = null;
         this._rngState = 0;
 
-        // ---- 暂停 ----
         this.paused = false;
+
+        // ---- 队伍受伤累积（桃桃大招条件） ----
+        this.globalDamageTaken = { red: 0, blue: 0 };
     }
 
     // ---------- 种子 & 随机 ----------
@@ -108,7 +122,6 @@ class AutoEngine {
         this._seed = (seed == null) ? null : (seed >>> 0);
         this._rngState = this._seed || 0;
     }
-
     random() {
         if (this._seed == null) return Math.random();
         this._rngState = (this._rngState * 1664525 + 1013904223) >>> 0;
@@ -122,14 +135,12 @@ class AutoEngine {
         this.log("[系统] 战斗已暂停", "system");
         this.updateUI();
     }
-
     resume() {
         if (!this.interval) return;
         this.paused = false;
         this.log("[系统] 战斗继续", "system");
         this.updateUI();
     }
-
     isPaused() { return this.paused; }
     isRunning() { return !!this.interval; }
 
@@ -139,6 +150,7 @@ class AutoEngine {
         this.p2 = new Team("blue", p2Names, false);
         this.turn = 1;
         this.paused = false;
+        this.globalDamageTaken = { red: 0, blue: 0 };
         this.log("=== 自动战斗开始 ===", "system");
         this.updateUI();
     }
@@ -195,6 +207,12 @@ class AutoEngine {
         team.chars.forEach(c => {
             if (c.isDead) return;
 
+            // 放逐中：完全跳过回合开始
+            if ((c.offFieldTurns || 0) > 0) {
+                this.log(`[${c.name}] 放逐中，跳过回合开始结算`, "special");
+                return;
+            }
+
             // 被动 turnStart
             c.passives.forEach(p => {
                 if (p.trigger !== "turnStart") return;
@@ -210,7 +228,15 @@ class AutoEngine {
                 }
             });
 
-            // 毒伤：走 applyDamage 的普通伤害结算
+            // 剪云：新月盈满回合回血
+            if (typeof c.hooks.onTurnStartXinYue === "function") {
+                c.hooks.onTurnStartXinYue({
+                    engine: this, char: c, team, turn: this.turn,
+                    log: (m, t) => this.log(m, t)
+                });
+            }
+
+            // 毒伤：走 applyDamage 普通结算
             if (c.poisonTurns > 0 && !c.isDead) {
                 const src = c.poisonSource;
                 const srcAtk = src ? (src.isDead ? src.baseAtk : src.atk) : 0;
@@ -272,6 +298,17 @@ class AutoEngine {
     }
 
     executeTurn() {
+        // 错误心递减（每回合一次）
+        [this.p1, this.p2].forEach(team => {
+            if (!team) return;
+            if (team.errorHearts > 0) {
+                team.errorHearts--;
+                if (team.errorHearts === 0) {
+                    this.log(`[系统] ${team.id === 'red' ? '红方' : '蓝方'} 错误心恢复正常`, "system");
+                }
+            }
+        });
+
         this.log(`<span class="log-turn">第 ${this.turn} 回合</span>`, "");
         this.checkRevival(this.p1);
         this.checkRevival(this.p2);
@@ -287,10 +324,19 @@ class AutoEngine {
 
         for (const act of actions) {
             if (!act.actor || act.actor.isDead || act.targetTeam.hearts <= 0) continue;
+
+            // 放逐中：跳过并递减
+            if ((act.actor.offFieldTurns || 0) > 0) {
+                act.actor.offFieldTurns--;
+                this.log(`[${act.actor.name}] 放逐中，跳过行动（剩余 ${act.actor.offFieldTurns} 回合）`, "special");
+                continue;
+            }
+
             if (act.actor.cannotAct > 0) {
                 this.log(`[${act.actor.name}] 无法行动，跳过回合！`, "special");
                 continue;
             }
+
             this.takeAction(act.actorTeam, act.actor, act.targetTeam);
             this.updateUI();
         }
@@ -308,14 +354,25 @@ class AutoEngine {
                 : false;
         }
         if (cond.type === "damageDealt") return actor.stats.totalDmg >= cond.value;
-if (cond.type === "damageTaken") {
-    const field = cond.field || "_dmgTaken";
-    return (actor[field] || 0) >= cond.value;
-}
+        if (cond.type === "damageTaken") {
+            const field = cond.field || "_dmgTaken";
+            return (actor[field] || 0) >= cond.value;
+        }
         return false;
     }
 
     takeAction(myTeam, actor, enemyTeam) {
+        // 剪云被动：队友行动 +0.5 碎片
+        myTeam.chars.forEach(ally => {
+            if (ally.isDead || ally === actor) return;
+            if (typeof ally.hooks.onAllyAction === "function") {
+                ally.hooks.onAllyAction({
+                    engine: this, char: ally, actor, team: myTeam,
+                    log: (m, t) => this.log(m, t)
+                });
+            }
+        });
+
         const aliveEnemies = enemyTeam.getAliveChars();
         if (aliveEnemies.length === 0) return;
 
@@ -393,90 +450,114 @@ if (cond.type === "damageTaken") {
     }
 
     _applyOnHitEffects(actor, target, dmg, targets, enemyTeam, myTeam) {
-    if (dmg <= 0) return;
+        if (dmg <= 0) return;
 
-    if (actor.xiJiStacks > 0) {
-        actor.xiJiStacks--;
-        actor.atk = Math.max(1, actor.atk - 2);
-        this.log(`[希冀] ${actor.name} 消耗一层，ATK 降至 ${actor.atk}`, "buff");
+        if (actor.xiJiStacks > 0) {
+            actor.xiJiStacks--;
+            actor.atk = Math.max(1, actor.atk - 2);
+            this.log(`[希冀] ${actor.name} 消耗一层，ATK 降至 ${actor.atk}`, "buff");
 
-        // 通用通知：让队友的 onAllyConsumedXiJi 自己响应
-        myTeam.chars.forEach(ally => {
-            if (!ally.isDead && typeof ally.hooks.onAllyConsumedXiJi === "function") {
-                ally.hooks.onAllyConsumedXiJi({
-                    engine: this,
-                    char: ally,
-                    consumer: actor,
-                    team: myTeam,
+            myTeam.chars.forEach(ally => {
+                if (!ally.isDead && typeof ally.hooks.onAllyConsumedXiJi === "function") {
+                    ally.hooks.onAllyConsumedXiJi({
+                        engine: this, char: ally, consumer: actor, team: myTeam,
+                        log: (m, t) => this.log(m, t)
+                    });
+                }
+            });
+        }
+
+        if (actor.buffWoYe > 0 && targets && targets.length > 0) {
+            actor.buffWoYe--;
+            const extraDmg = Math.round(dmg * 0.2);
+            const first = targets[0];
+            if (extraDmg > 0 && first && !first.isDead) {
+                this.log(`[${actor.name}] 触发[我也要玩]，附加 ${extraDmg} 点伤害。`, "special");
+                this.applyDamage(actor, first, extraDmg, enemyTeam, myTeam);
+            }
+        }
+    }
+
+    _recordDamageTaken(target, targetTeam, dmg) {
+        if (!target || dmg <= 0) return;
+        target._dmgTaken = (target._dmgTaken || 0) + dmg;
+
+        // 队伍受伤累积（桃桃大招条件）
+        if (targetTeam && this.globalDamageTaken) {
+            const key = targetTeam === this.p1 ? 'red' : (targetTeam === this.p2 ? 'blue' : (targetTeam.id === 'red' ? 'red' : 'blue'));
+            this.globalDamageTaken[key] = (this.globalDamageTaken[key] || 0) + dmg;
+        }
+
+        // 通用通知
+        targetTeam.chars.forEach(ally => {
+            if (ally.isDead) return;
+            if (typeof ally.hooks.onTeamDamageTaken === "function") {
+                ally.hooks.onTeamDamageTaken({
+                    engine: this, char: ally, team: targetTeam, target, dmg,
                     log: (m, t) => this.log(m, t)
                 });
             }
         });
-    }
 
-    if (actor.buffWoYe > 0 && targets && targets.length > 0) {
-        actor.buffWoYe--;
-        const extraDmg = Math.round(dmg * 0.2);
-        const first = targets[0];
-        if (extraDmg > 0 && first && !first.isDead) {
-            this.log(`[${actor.name}] 触发[我也要玩]，附加 ${extraDmg} 点伤害。`, "special");
-            this.applyDamage(actor, first, extraDmg, enemyTeam, myTeam);
-        }
-    }
-}
-
-    _recordDamageTaken(target, targetTeam, dmg) {
-    if (!target || dmg <= 0) return;
-    target._dmgTaken = (target._dmgTaken || 0) + dmg;
-
-    // 通用：通知全队“有队友受伤”
-    targetTeam.chars.forEach(ally => {
-        if (ally.isDead) return;
-        if (typeof ally.hooks.onTeamDamageTaken === "function") {
-            ally.hooks.onTeamDamageTaken({
-                engine: this,
-                char: ally,
-                team: targetTeam,
-                target,
-                dmg,
+        if (typeof target.hooks.onDamageTaken === "function") {
+            target.hooks.onDamageTaken({
+                engine: this, char: target, team: targetTeam, dmg,
                 log: (m, t) => this.log(m, t)
             });
         }
-    });
 
-    // 个体受伤事件
-    if (typeof target.hooks.onDamageTaken === "function") {
-        target.hooks.onDamageTaken({
-            engine: this, char: target, team: targetTeam, dmg,
-            log: (m, t) => this.log(m, t)
-        });
+        if (target.darkRoomTurns > 0) target.darkRoomDmgTaken += dmg;
     }
 
-    if (target.darkRoomTurns > 0) target.darkRoomDmgTaken += dmg;
-}
-
-    // opts: { isPoison, reason }
+    // opts: { isPoison, isTrue, reason }
     applyDamage(actor, target, dmg, targetTeam, myTeam, opts = {}) {
         if (!target || dmg <= 0) return 0;
 
-        if (target.darkRoomTurns > 0) dmg = Math.round(dmg * 1.15);
+        // ================== 真伤分支 ==================
+        if (opts.isTrue) {
+            const trueDmg = Math.max(1, Math.round(dmg));
+
+            // 统计
+            if (actor) actor.stats.totalDmg += trueDmg;
+
+            // 承伤记录（含 globalDamageTaken）
+            this._recordDamageTaken(target, targetTeam, trueDmg);
+
+            // 通知 onDamageDealt
+            if (actor && typeof actor.hooks.onDamageDealt === "function") {
+                actor.hooks.onDamageDealt({
+                    engine: this, char: actor, dmg: trueDmg, target,
+                    isTrue: true, isPoison: false,
+                    log: (m, t) => this.log(m, t)
+                });
+            }
+
+            target.hp -= trueDmg;
+            const atkName = actor ? actor.name : "?";
+            this.log(`[真伤] ${atkName} -> ${target.name} 造成 ${trueDmg} 真伤 (剩余HP: ${Math.max(0, target.hp)})`, "dmg");
+
+            if (target.hp <= 0) this.handleDeath(target, targetTeam, actor, opts.reason || "真伤致死");
+            return trueDmg;
+        }
+
+        // ================== 普通伤害分支 ==================
+        // 小黑屋易伤：1.10
+        if (target.darkRoomTurns > 0) dmg = Math.round(dmg * 1.10);
 
         let reduction = 0;
-
-// 通用：询问全队有没有“队伍级减伤”
-targetTeam.chars.forEach(ally => {
-    if (ally.isDead) return;
-    if (typeof ally.hooks.getTeamDamageReduction === "function") {
-        const r = ally.hooks.getTeamDamageReduction({
-            engine: this, char: ally, team: targetTeam
+        targetTeam.chars.forEach(ally => {
+            if (ally.isDead) return;
+            if (typeof ally.hooks.getTeamDamageReduction === "function") {
+                const r = ally.hooks.getTeamDamageReduction({
+                    engine: this, char: ally, team: targetTeam
+                });
+                if (typeof r === "number") reduction += r;
+            }
         });
-        if (typeof r === "number") reduction += r;
-    }
-});
 
-if (target.domainTurns > 0) reduction += 0.15;
-if (target.buffTurns > 0) reduction += 0.10;
-if (target.fearTurns > 0) reduction += 0.50;
+        if (target.domainTurns > 0) reduction += 0.15;
+        if (target.buffTurns > 0) reduction += 0.10;
+        if (target.fearTurns > 0) reduction += 0.50;
         if (reduction > 0) dmg = Math.round(dmg * (1 - Math.min(0.9, reduction)));
 
         if (target.domainTurns > 0 && this.random() < 0.10) {
@@ -499,9 +580,20 @@ if (target.fearTurns > 0) reduction += 0.50;
             }
         }
 
+        // 承伤记录（含护盾吸收）
         this._recordDamageTaken(target, targetTeam, absorbed + dmg);
 
-        if (dmg > 0 && actor) actor.stats.totalDmg += dmg;
+        // 统计
+        if (dmg > 0 && actor) {
+            actor.stats.totalDmg += dmg;
+            if (typeof actor.hooks.onDamageDealt === "function") {
+                actor.hooks.onDamageDealt({
+                    engine: this, char: actor, dmg, target,
+                    isTrue: false, isPoison: opts.isPoison || false,
+                    log: (m, t) => this.log(m, t)
+                });
+            }
+        }
 
         if (dmg <= 0) return 0;
 
@@ -542,25 +634,42 @@ if (target.fearTurns > 0) reduction += 0.50;
 
     handleDeath(target, targetTeam, killer, reason) {
         if (target.isDead) return;
+
+        // 先调 onDeath，允许角色自定义死亡行为
+        let override = null;
+        if (typeof target.hooks.onDeath === "function") {
+            const ret = target.hooks.onDeath({
+                engine: this, char: target, team: targetTeam, killer, reason,
+                log: (m, t) => this.log(m, t)
+            });
+            if (ret && typeof ret === "object") override = ret;
+        }
+
         target.hp = 0;
         target.isDead = true;
         target.stats.deaths++;
 
-        if (typeof target.hooks.onDeath === "function") {
-            target.hooks.onDeath({
-                engine: this, char: target, team: targetTeam, killer,
-                log: (m, t) => this.log(m, t)
-            });
-        }
-
         if (!targetTeam.isDummy) {
-            target.reviveRound = this.turn + 1;
-            targetTeam.hearts = Math.max(0, targetTeam.hearts - 1);
+            if (!(override && override.noHeartLoss)) {
+                targetTeam.hearts = Math.max(0, targetTeam.hearts - 1);
+            }
+            if (override && override.noRevive) {
+                target.reviveRound = 0;
+            } else {
+                target.reviveRound = this.turn + 1;
+            }
         }
 
         const teamName = targetTeam.isPlayer ? "红方" : "蓝方";
         if (!targetTeam.isDummy) {
-            this.log(`💀 ${target.name} 阵亡！${teamName}扣除1心 (剩 ${targetTeam.hearts} 心)`, "death");
+            if (override && override.noHeartLoss) {
+                this.log(`💀 ${target.name} 阵亡（不扣心）`, "death");
+            } else {
+                this.log(`💀 ${target.name} 阵亡！${teamName}扣除1心 (剩 ${targetTeam.hearts} 心)`, "death");
+            }
+            if (override && override.noRevive) {
+                this.log(`☠️ ${target.name} 不会复活`, "death");
+            }
         } else {
             this.log(`💀 ${target.name} 已被击碎！`, "death");
         }
@@ -581,27 +690,32 @@ if (target.fearTurns > 0) reduction += 0.50;
                 char.darkRoomTurns = 0;
                 char.darkRoomSource = null;
                 char.darkRoomDmgTaken = 0;
+                // 清剪云字段
+                char.jianyunFragments = 0;
+                char.adminPrivilege = 0;
+                char.xinYueTurns = 0;
+                char.marked = false;
+                char.offFieldTurns = 0;
                 this.log(`✨ [${team.id === "red" ? "红方" : "蓝方"}] ${char.name} 复活。`, "heal");
             }
         });
     }
 
     endGame() {
-    let winner = "平局";
-    if (this.p1.hearts > this.p2.hearts) winner = "红方胜利";
-    else if (this.p2.hearts > this.p1.hearts) winner = "蓝方胜利";
-    else winner = "平局";
-    this.log(`=== 战斗结束, 结果: ${winner} (总计 ${this.turn} 回合) ===`, "system");
-    if (this.onEnd) this.onEnd(winner, this.turn);
-}
+        let winner = "平局";
+        if (this.p1.hearts > this.p2.hearts) winner = "红方胜利";
+        else if (this.p2.hearts > this.p1.hearts) winner = "蓝方胜利";
+        else winner = "平局";
+        this.log(`=== 战斗结束, 结果: ${winner} (总计 ${this.turn} 回合) ===`, "system");
+        if (this.onEnd) this.onEnd(winner, this.turn);
+    }
 
     // ---------- 批量模拟 ----------
     batchSimulate(p1Names, p2Names, rounds = 100, baseSeed = null, maxTurns = 999) {
         const seed0 = (baseSeed == null || isNaN(baseSeed)) ? (Date.now() >>> 0) : (baseSeed >>> 0);
 
         const results = {
-            rounds,
-            seed: seed0,
+            rounds, seed: seed0,
             redWin: 0, blueWin: 0, draw: 0,
             totalTurns: 0, minTurns: Infinity, maxTurns: 0,
             redChars: {}, blueChars: {}
@@ -633,9 +747,9 @@ if (target.fearTurns > 0) reduction += 0.50;
                 safety++;
             }
 
-if (eng.p1.hearts > eng.p2.hearts) results.redWin++;
-else if (eng.p2.hearts > eng.p1.hearts) results.blueWin++;
-else results.draw++;
+            if (eng.p1.hearts > eng.p2.hearts) results.redWin++;
+            else if (eng.p2.hearts > eng.p1.hearts) results.blueWin++;
+            else results.draw++;
 
             results.totalTurns += eng.turn;
             results.minTurns = Math.min(results.minTurns, eng.turn);
@@ -715,7 +829,8 @@ class ManualEngine extends AutoEngine {
         this.turn = 1;
         this.currentActorIndex = 0;
         this.targetIndex = 0;
-        this._ended = false;  
+        this._ended = false;
+        this.globalDamageTaken = { red: 0, blue: 0 };
         this.log("=== 手动测试模式开始 ===", "system");
         this.updateUI();
     }
@@ -737,7 +852,6 @@ class ManualEngine extends AutoEngine {
         this.updateUI();
     }
 
-    // 重建木桩队伍
     setDummyConfig(count, hp) {
         const dummyNames = [];
         for (let i = 1; i <= count; i++) {
@@ -754,7 +868,6 @@ class ManualEngine extends AutoEngine {
         this.updateUI();
     }
 
-    // 清零统计数据
     resetStats() {
         const clear = (team) => {
             if (!team) return;
@@ -770,6 +883,7 @@ class ManualEngine extends AutoEngine {
         this.turn = 1;
         this.currentActorIndex = 0;
         this._ended = false;
+        this.globalDamageTaken = { red: 0, blue: 0 };
         this.log(`[系统] 统计数据已重置，回合数归零`, "system");
         this.updateUI();
     }
@@ -787,12 +901,22 @@ class ManualEngine extends AutoEngine {
             this.turn++;
             this.checkRevival(this.myTeam);
             this.checkRevival(this.dummyTeam);
+
+            // 错误心递减
+            [this.myTeam, this.dummyTeam].forEach(team => {
+                if (team.errorHearts > 0) {
+                    team.errorHearts--;
+                    if (team.errorHearts === 0) {
+                        this.log(`[系统] ${team.id === 'red' ? '红方' : '蓝方'} 错误心恢复正常`, "system");
+                    }
+                }
+            });
+
             this.processTurnStart(this.myTeam);
             this.processTurnStart(this.dummyTeam);
             this.log(`<span class="log-turn">-- 进入第 ${this.turn} 回合 --</span>`, "");
         }
-        
-        // 手动测试结束检测
+
         const allDummyDead = this.dummyTeam.chars.every(c => c.isDead);
         const allPlayerDead = this.myTeam.getAliveChars().length === 0;
         if ((allDummyDead || allPlayerDead) && !this._ended) {
@@ -837,6 +961,18 @@ class ManualEngine extends AutoEngine {
         }
 
         this.log(`[玩家] ${actor.name} 使用 [${skill.name}]`, "buff");
+
+        // 触发队友 onAllyAction
+        this.myTeam.chars.forEach(ally => {
+            if (ally.isDead || ally === actor) return;
+            if (typeof ally.hooks.onAllyAction === "function") {
+                ally.hooks.onAllyAction({
+                    engine: this, char: ally, actor, team: this.myTeam,
+                    log: (m, t) => this.log(m, t)
+                });
+            }
+        });
+
         this.resolveSkillEffect(actor, target, this.dummyTeam, this.myTeam, skill, skillIdx);
         this.nextTurn();
         this.updateUI();

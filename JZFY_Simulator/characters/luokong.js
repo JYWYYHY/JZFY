@@ -1,7 +1,7 @@
 CharacterRegistry.register({
     id: "luokong",
     name: "落空",
-    hp: 60,
+    hp: 58,
     atk: 4,
 
     skills: [
@@ -10,7 +10,7 @@ CharacterRegistry.register({
             effects: [{ type: "damage", ratio: 0.5, target: "enemyTeam" }]
         },
         {
-            name: "希冀", cost: 1,
+            name: "希冀不能落空", cost: 1,
             effects: [{ type: "custom", hook: "xiJi" }]
         },
         {
@@ -21,7 +21,7 @@ CharacterRegistry.register({
             ]
         },
         {
-            name: "我们三个", cost: 0, isUltimate: true,
+            name: "我们三个真厉害", cost: 0, isUltimate: true,
             ultimateCondition: { type: "custom", hook: "canUltimate" },
             effects: [{ type: "custom", hook: "yaoQi" }]
         }
@@ -29,16 +29,16 @@ CharacterRegistry.register({
 
     hooks: {
         canUltimate(ctx) {
-            return ctx.actor.shuaiQi >= 15;
+            return (ctx.actor.shuaiQi || 0) >= 15;
         },
         xiJi(ctx) {
             const { actor, myTeam, log } = ctx;
             const ally = myTeam.getAliveChars().sort((a, b) => a.hp - b.hp)[0];
             if (!ally) return;
-            const before = ally.xiJiStacks;
+            const before = ally.xiJiStacks || 0;
             ally.xiJiStacks = Math.min(2, before + 2);
             ally.atk += (ally.xiJiStacks - before) * 2;
-            log(`[落空] 为 ${ally.name} 施加 [希冀]（${ally.xiJiStacks}层，ATK+${2 * ally.xiJiStacks}）`, "buff");
+            log(`[落空] ${ally.name} 获得2层[希冀]（ATK+${2 * ally.xiJiStacks}）`, "buff");
         },
         darkRoom(ctx) {
             const { actor, target, log } = ctx;
@@ -46,7 +46,7 @@ CharacterRegistry.register({
             target.darkRoomTurns = 2;
             target.darkRoomSource = actor;
             target.darkRoomDmgTaken = 0;
-            log(`[落空] ${target.name} 进入小黑屋（受伤+15%，2回合）`, "special");
+            log(`[落空] ${target.name} 进入小黑屋（易伤 10%，2回合）`, "special");
         },
         onDarkRoomClear(ctx) {
             const { engine, char, target, dmgTaken, log } = ctx;
@@ -54,23 +54,23 @@ CharacterRegistry.register({
             if (heal > 0) {
                 const team = engine._findTeamOf(char);
                 team.getAliveChars().forEach(a => a.hp = Math.min(a.maxHp, a.hp + heal));
-                log(`[落空] 小黑屋清除，全队回复 ${heal} 点生命。`, "heal");
+                log(`[落空] 小黑屋清除，全队回复 ${heal}`, "heal");
             }
-            char.shuaiQi += 5;
+            char.shuaiQi = (char.shuaiQi || 0) + 5;
         },
         yaoQi(ctx) {
             const { actor, myTeam, log } = ctx;
             actor.shuaiQi = 0;
             myTeam.getAliveChars().forEach(c => { c.buffWoYe = 2; });
-            log(`[落空] 消耗15点耍起，全队获得[我也要玩]！`, "special");
+            log(`[落空] 消耗15点耍起，全队获得[我也要玩]`, "special");
         },
         onAllyConsumedXiJi(ctx) {
-            ctx.char.shuaiQi += 2;
+            ctx.char.shuaiQi = (ctx.char.shuaiQi || 0) + 2;
         },
         onDeath(ctx) {
             const { team, log } = ctx;
-            team.getAliveChars().forEach(c => { c.buffTurns = Math.max(c.buffTurns, 2); });
-            log(`[落空] 阵亡触发被动[我相信你]，全队获得10%减伤持续2回合。`, "special");
+            team.getAliveChars().forEach(c => { c.buffTurns = Math.max(c.buffTurns || 0, 2); });
+            log(`[落空] 阵亡被动[我相信你]，全队减伤 10%×2回合`, "special");
         }
     }
 });
