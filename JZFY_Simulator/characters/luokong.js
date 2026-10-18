@@ -72,5 +72,12 @@ CharacterRegistry.register({
             team.getAliveChars().forEach(c => { c.buffTurns = Math.max(c.buffTurns || 0, 2); });
             log(`[落空] 阵亡被动[我相信你]，全队减伤 10%×2回合`, "special");
         }
+onLowHpBasicAttack(ctx) {
+    const { char, team, engine, log } = ctx;
+    if (char.lowHpBasicLastTurn && engine.turn - char.lowHpBasicLastTurn < 3) return;
+    char.lowHpBasicLastTurn = engine.turn;
+    team.skillPoints = Math.min(5, team.skillPoints + 1);
+    log(`[落空] 低血被动触发，额外 +1 技能点`, "buff");
+}
     }
 });

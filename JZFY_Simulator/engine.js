@@ -572,6 +572,38 @@ class AutoEngine {
                 });
             }
 
+// 暴走转移（真伤也生效）
+const taoGuard = targetTeam.chars.find(c =>
+    c.name === "吃颗桃挑" && !c.isDead && (c.berserkTurns || 0) > 0 && c !== target
+);
+if (taoGuard) {
+    const taoDmg = Math.round(trueDmg * 0.8);
+    const restDmg = trueDmg - taoDmg;
+    this.log(`[暴走] ${taoGuard.name} 为 ${target.name} 分担 80% 真伤 (${taoDmg})`, "special");
+    this._recordDamageTaken(taoGuard, targetTeam, taoDmg);
+    taoGuard.hp -= taoDmg;
+    if (taoGuard.hp <= 0) this.handleDeath(taoGuard, targetTeam, actor, "暴走分担");
+    trueDmg = restDmg;
+    if (trueDmg <= 0) return 0;
+}
+
+// 致命伤害 → 替死检查（真伤也能触发）
+if (target.hp - trueDmg <= 0) {
+    const guard = targetTeam.chars.find(c =>
+        c !== target && !c.isDead
+        && typeof c.hooks.onAllyLethal === "function"
+        && !c.zunziPassiveUsed
+    );
+    if (guard) {
+        const replaced = guard.hooks.onAllyLethal({
+            engine: this, char: guard, team: targetTeam,
+            victim: target, dmg: trueDmg,
+            log: (m, t) => this.log(m, t)
+        });
+        if (replaced) target = guard;
+    }
+}
+
             target.hp -= trueDmg;
             const atkName = actor ? actor.name : "?";
             this.log(`[真伤] ${atkName} -> ${target.name} 造成 ${trueDmg} 真伤 (剩余HP: ${Math.max(0, target.hp)})`, "dmg");

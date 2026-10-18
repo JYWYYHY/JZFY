@@ -24,6 +24,10 @@
         }
     ],
 
+passives: [
+    { trigger: "turnStart", interval: 1, hook: "onTaotiaoTurnStart" }
+],
+
     hooks: {
         basicPercent(ctx) {
             const { actor, target, enemyTeam, myTeam, applyDamage } = ctx;
@@ -62,5 +66,32 @@
             });
             log(`[吃颗桃挑] 狂欢之夜：自身变30血，敌方技能点清零，施加2轮恐惧`, "special");
         }
+
+    // 回合开始检查是否触发暴走
+    onTaotiaoTurnStart(ctx) {
+        const { char, engine, log } = ctx;
+        const team = engine._findTeamOf(char);
+        if (!team) return;
+        if ((char.berserkTurns || 0) > 0) return;
+        const allies = team.getAliveChars().filter(c => c !== char);
+        if (allies.length > 0 && allies.every(c => c.hp < c.maxHp * 0.5)) {
+            char.berserkTurns = 2;
+            log(`[桃桃] 向死而生触发！进入暴走状态`, "special");
+        }
+    },
+
+    // 暴走死亡时保队友
+    onDeath(ctx) {
+        const { char, engine, log } = ctx;
+        if ((char.berserkTurns || 0) > 0) {
+            const team = engine._findTeamOf(char);
+            if (team) {
+                team.getAliveChars().forEach(a => {
+                    a.hp = Math.max(a.hp, Math.round(a.maxHp * 0.5));
+                });
+                log(`[桃桃] 暴走死亡，队友恢复至 50% 血`, "special");
+            }
+        }
+    }
     }
 });
