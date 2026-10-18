@@ -21,7 +21,7 @@ CharacterRegistry.register({
             effects: [{ type: "custom", hook: "summonSticks" }]
         },
         {
-            name: "槐木之主", cost: 0, isUltimate: true,
+            name: "棍木之主", cost: 0, isUltimate: true,
             ultimateCondition: { type: "custom", hook: "canUltimate" },
             effects: [{ type: "custom", hook: "bigStick" }]
         }
@@ -37,6 +37,8 @@ CharacterRegistry.register({
             const team = engine._findTeamOf(actor);
             return team && team.getAliveChars().length === 1;
         },
+
+        // 召唤2根棍木（如果已有则先回满+4，未满2则补满）
         summonSticks(ctx) {
             const { actor, log } = ctx;
             if (!actor.huaiMuHp) actor.huaiMuHp = [];
@@ -45,14 +47,24 @@ CharacterRegistry.register({
             }
             while (actor.huaiMuHp.length < 2) actor.huaiMuHp.push(12);
             log(`[01] 召唤棍木 x${actor.huaiMuHp.length}`, "special");
+            // ATK 加成
+            const bonus = actor.huaiMuHp.length;
+            const base = actor.def ? actor.def.atk : 4;
+            actor.atk = base + bonus + (actor.bigHuaiMu ? 6 : 0);
         },
+
         bigStick(ctx) {
             const { actor, log } = ctx;
             actor.bigHuaiMu = { hp: 36 };
             actor.maxHp = Math.round(actor.maxHp + 20);
             actor.hp = Math.round(actor.hp + 20);
             log(`[01] 召唤巨大棍木（36HP），maxHp+20 hp+20`, "special");
+            const bonus = (actor.huaiMuHp ? actor.huaiMuHp.length : 0) + 6;
+            const base = actor.def ? actor.def.atk : 4;
+            actor.atk = base + bonus;
         },
+
+        // 回合开始：棍木回血，01 按棍木数量回血
         onTurnStartStickRegen(ctx) {
             const { char, engine, log } = ctx;
             if (char.huaiMuHp && char.huaiMuHp.length > 0) {
@@ -68,41 +80,23 @@ CharacterRegistry.register({
                 char.hp = Math.min(char.maxHp, char.hp + healAmt);
             }
         },
-        onDamageTaken(ctx) {
-            const { char, dmg, log } = ctx;
-            if (!char.huaiMuHp || char.huaiMuHp.length === 0) return;
-            let remaining = dmg;
-            let absorbed = 0;
-            while (remaining > 0 && char.huaiMuHp.length > 0) {
-                const firstHp = char.huaiMuHp[0];
-                if (firstHp >= remaining) {
-                    char.huaiMuHp[0] = firstHp - remaining;
-                    absorbed += remaining;
-                    remaining = 0;
-                } else {
-                    absorbed += firstHp;
-                    remaining -= firstHp;
-                    char.huaiMuHp.shift();
-                }
-            }
-            if (absorbed > 0) {
-                // 引擎在 onDamageTaken 之后才扣血，这里 +absorbed 相当于预支血量，净效果 = 实际扣血
-                char.hp = char.hp + absorbed;
-                log(`[01] 棍木吸收了 ${absorbed} 点伤害`, "buff");
-            }
-        },
+
+        // 死亡：清空棍木 + 不复活 + 队友加攻血
         onDeath(ctx) {
             const { char, engine, log } = ctx;
-            // 死时：不复活、队友死加攻血
             const team = engine._findTeamOf(char);
             if (team) {
                 team.getAliveChars().forEach(ally => {
                     ally.maxHp = Math.round(ally.maxHp + 15);
-                    ally.atk = Math.round(ally.atk + 2);
-                    ally.hp = Math.round(Math.min(ally.maxHp, ally.hp + 6));
+                    ally.atk += 2;
+                    ally.hp = Math.min(ally.maxHp, ally.hp + 6);
                 });
-                log(`[01] 亡[你们全都是棍木]：队友血上限+15, ATK+2, 回复6HP`, "special");
+                log(`[01] 亡[你们全都是棍木]：队友血上限+15, ATK+2, +6HP`, "special");
             }
+            // 清空棍木
+            char.huaiMuHp = [];
+            char.bigHuaiMu = null;
+            return { noHeartLoss: false, noRevive: true };
         }
     }
 });

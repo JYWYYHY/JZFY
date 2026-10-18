@@ -76,6 +76,20 @@ class Character {
         this.marked = false;
         this.offFieldTurns = 0;
 
+        // ---- 素锦 ----
+        this.swordSteles = 0;
+        this.baoxueActive = 0;
+        this.baoxueBurst = 0;
+        this.baoxueCooldown = 0;
+        this.sujinRevived = false;
+        this.sujinHeZongDmg = 0;
+        this.sujinHeZongUsed = false;
+        this.heZongActive = 0;
+        this.heZongBuffTurns = 0;
+        this.maxHpDown = 0;
+        this.lastAttackTarget = null;
+        this.sameTargetHits = 0;
+
         this.stats = { totalDmg: 0, deaths: 0, ults: 0, turnsAlive: 0 };
     }
 }
@@ -93,6 +107,7 @@ class Team {
         this.hearts = 5;
         this.errorHearts = 0;   // 剪云污染心计数
         this.skillPoints = 3;
+        this.heZongBlockTurns = 0;
     }
     getAliveEnemies(enemyTeam) { return enemyTeam.chars.filter(c => !c.isDead); }
     getAliveChars() { return this.chars.filter(c => !c.isDead); }
@@ -292,6 +307,26 @@ class AutoEngine {
                 }
             }
 
+            // ---- 素锦：爆血持续与冷却 ----
+            if (c.baoxueActive > 0) {
+                c.baoxueActive--;
+                if (c.baoxueActive === 0) {
+                    c.baoxueBurst = 0;
+                    c.baoxueCooldown = 2;
+                    this.log(`[${c.name}] 爆血结束，进入 2 回合冷却`, "buff");
+                }
+            }
+            // baoxueCooldown 的递减在 onTurnStartSteles 里做
+
+            // ---- 素锦：合纵 buff / 大招禁言倒数 ----
+            if (c.heZongBuffTurns > 0) {
+                c.heZongBuffTurns--;
+                if (c.heZongBuffTurns === 0 && c.name !== "素锦") {
+                    c.atk = Math.max(1, c.atk - 4);
+                }
+            }
+            if (c.heZongActive > 0) c.heZongActive--;
+
             if (c.buffTurns > 0) c.buffTurns--;
             if (c.cannotAct > 0) c.cannotAct--;
         });
@@ -307,6 +342,7 @@ class AutoEngine {
                     this.log(`[系统] ${team.id === 'red' ? '红方' : '蓝方'} 错误心恢复正常`, "system");
                 }
             }
+            if (team.heZongBlockTurns > 0) team.heZongBlockTurns--;
         });
 
         this.log(`<span class="log-turn">第 ${this.turn} 回合</span>`, "");
@@ -343,6 +379,10 @@ class AutoEngine {
     }
 
     canUseUltimate(actor, myTeam, enemyTeam) {
+    // 合纵禁用
+    if (enemyTeam && enemyTeam.heZongBlockTurns > 0) {
+        return false;
+    }
         const ult = actor.skills.find(s => s.isUltimate);
         if (!ult) return false;
         const cond = ult.ultimateCondition;
@@ -633,47 +673,51 @@ class AutoEngine {
     }
 
     handleDeath(target, targetTeam, killer, reason) {
-        if (target.isDead) return;
+    if (target.isDead) return;
 
-        // 先调 onDeath，允许角色自定义死亡行为
-        let override = null;
-        if (typeof target.hooks.onDeath === "function") {
-            const ret = target.hooks.onDeath({
-                engine: this, char: target, team: targetTeam, killer, reason,
-                log: (m, t) => this.log(m, t)
-            });
-            if (ret && typeof ret === "object") override = ret;
+    let override = null;
+    if (typeof target.hooks.onDeath === "function") {
+        const ret = target.hooks.onDeath({
+            engine: this, char: target, team: targetTeam, killer, reason,
+            log: (m, t) => this.log(m, t)
+        });
+        if (ret && typeof ret === "object") override = ret;
+    }
+
+    // 死亡被拦截（如素锦神碑护主）
+    if (override && override.preventDeath) {
+        return;
+    }
+
+    target.hp = 0;
+    target.isDead = true;
+    target.stats.deaths++;
+
+    if (!targetTeam.isDummy) {
+        if (!(override && override.noHeartLoss)) {
+            targetTeam.hearts = Math.max(0, targetTeam.hearts - 1);
         }
-
-        target.hp = 0;
-        target.isDead = true;
-        target.stats.deaths++;
-
-        if (!targetTeam.isDummy) {
-            if (!(override && override.noHeartLoss)) {
-                targetTeam.hearts = Math.max(0, targetTeam.hearts - 1);
-            }
-            if (override && override.noRevive) {
-                target.reviveRound = 0;
-            } else {
-                target.reviveRound = this.turn + 1;
-            }
-        }
-
-        const teamName = targetTeam.isPlayer ? "红方" : "蓝方";
-        if (!targetTeam.isDummy) {
-            if (override && override.noHeartLoss) {
-                this.log(`💀 ${target.name} 阵亡（不扣心）`, "death");
-            } else {
-                this.log(`💀 ${target.name} 阵亡！${teamName}扣除1心 (剩 ${targetTeam.hearts} 心)`, "death");
-            }
-            if (override && override.noRevive) {
-                this.log(`☠️ ${target.name} 不会复活`, "death");
-            }
+        if (override && override.noRevive) {
+            target.reviveRound = 0;
         } else {
-            this.log(`💀 ${target.name} 已被击碎！`, "death");
+            target.reviveRound = this.turn + 1;
         }
     }
+
+    const teamName = targetTeam.isPlayer ? "红方" : "蓝方";
+    if (!targetTeam.isDummy) {
+        if (override && override.noHeartLoss) {
+            this.log(`💀 ${target.name} 阵亡（不扣心）`, "death");
+        } else {
+            this.log(`💀 ${target.name} 阵亡！${teamName}扣除1心 (剩 ${targetTeam.hearts} 心)`, "death");
+        }
+        if (override && override.noRevive) {
+            this.log(`☠️ ${target.name} 不会复活`, "death");
+        }
+    } else {
+        this.log(`💀 ${target.name} 已被击碎！`, "death");
+    }
+}
 
     checkRevival(team) {
         team.chars.forEach(char => {
@@ -696,6 +740,19 @@ class AutoEngine {
                 char.xinYueTurns = 0;
                 char.marked = false;
                 char.offFieldTurns = 0;
+                // 清素锦字段（sujinRevived 不清，神碑护主终身一次）
+                char.swordSteles = 0;
+                char.baoxueActive = 0;
+                char.baoxueBurst = 0;
+                char.baoxueCooldown = 0;
+                char.heZongBuffTurns = 0;
+                char.heZongActive = 0;
+                char.maxHpDown = 0;
+                char.lastAttackTarget = null;
+                char.sameTargetHits = 0;
+                // 合纵是每条命一次，复活后重置
+                char.sujinHeZongUsed = false;
+                char.sujinHeZongDmg = 0;
                 this.log(`✨ [${team.id === "red" ? "红方" : "蓝方"}] ${char.name} 复活。`, "heal");
             }
         });
@@ -902,7 +959,7 @@ class ManualEngine extends AutoEngine {
             this.checkRevival(this.myTeam);
             this.checkRevival(this.dummyTeam);
 
-            // 错误心递减
+            // 错误心 / 合纵禁言递减
             [this.myTeam, this.dummyTeam].forEach(team => {
                 if (team.errorHearts > 0) {
                     team.errorHearts--;
@@ -910,6 +967,7 @@ class ManualEngine extends AutoEngine {
                         this.log(`[系统] ${team.id === 'red' ? '红方' : '蓝方'} 错误心恢复正常`, "system");
                     }
                 }
+                if (team.heZongBlockTurns > 0) team.heZongBlockTurns--;
             });
 
             this.processTurnStart(this.myTeam);
