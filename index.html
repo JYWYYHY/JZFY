@@ -45,8 +45,6 @@
   .battle-card.dead { opacity: 0.3; }
   .battle-card.offField { opacity: 0.3; border: 2px dashed #888; }
   .battle-card.selectable { cursor: pointer; border: 2px solid #4caf50; box-shadow: 0 0 10px #4caf50; }
-  .mu-card { margin-left: 20px; margin-top: 4px; padding: 4px 8px; background: #2a2a20; border: 1px dashed #a89c4a; border-radius: 6px; font-size: 11px; }
-  .mu-card.selectable { cursor: pointer; border: 2px solid #4caf50; box-shadow: 0 0 10px #4caf50; }
   .hp-bar { height: 6px; background: #333; border-radius: 3px; margin: 4px 0; overflow: hidden; }
   .hp-fill { height: 100%; background: #ff5c5c; transition: 0.2s; }
   .buffs { color: #aaa; margin-top: 4px; line-height: 1.4; word-break: break-all; font-size: 11px; }
@@ -150,22 +148,12 @@ function findCharByUid(uid) {
   return state.sides.player.team.concat(state.sides.ai.team).find(c => c.uid === uid) || null;
 }
 
+// 决斗隔离判断：非回血/非加盾效果均需通过此检查
 function isDuelProtected(actor, target) {
   if (!target || !target.effects || !target.effects.duel) return false;
   if (actor && actor.uid === target.uid) return false;
   if (actor && actor.uid === target.effects.duel.uid) return false;
   return true;
-}
-
-function isUltBlocked(actor) {
-  const enemyTeam = state.sides[actor.side === 'player' ? 'ai' : 'player'].team;
-  return enemyTeam.some(c => c.alive && c.effects.heZongActive > 0);
-}
-
-function updateSujinAtk(actor) {
-  if (!actor || actor.id !== 'sujin') return;
-  const buff = actor.effects.heZongBuff > 0 ? 4 : 0;
-  actor.atk = round1(actor.baseAtk + actor.effects.swordSteles + actor.effects.baoxueBurst * 2 + buff);
 }
 
 /* ================== 角色数据（精卫完整保留） ================== */
@@ -206,7 +194,7 @@ const TEMPLATES = {
       basic:{name:'普攻', type:'aoe', desc:'对敌方全体造成100%直伤，恢复1技能点。'}, 
       s1:{name:'赞美七休日', type:'single', desc:'消耗1技能点。60%概率200%伤，20%概率400%伤，19%概率放假1轮，1%概率放假7轮。回8血。'}, 
       s2:{name:'王从天降，愤怒狰狞', type:'aoe', desc:'消耗1技能点。造成全队攻击力160%的伤害，均摊。'}, 
-      ult:{name:'神临', type:'single', desc:'释放5次技能后可释放。机制抹杀一名敌方角色（无视免死、减伤、护盾、暴走转移及一切复活/保命机制），闭春寒回其生命上限80%的血，回1技能点。'} 
+      ult:{name:'神临', type:'single', desc:'释放5次技能后可释放。机制抹杀一名敌方角色（无视免死、减伤、护盾与暴走转移），闭春寒回其生命上限80%的血，回1技能点。'} 
     }, 
     passive:'【亡命之徒】：死时不扣心，全队回15血、+4攻、回5技能点。无法复活。' 
   }, 
@@ -245,8 +233,8 @@ const TEMPLATES = {
     skills:{ 
       basic:{name:'普攻', type:'single', desc:'造成100%伤，回5血。'}, 
       s1:{name:'棍木啊', type:'aoe', desc:'对全体造成100%伤。'}, 
-      s2:{name:'小棍木来喽', type:'self', desc:'召2根棍木（加攻/回血，棍木需被单独攻击才会受损）。'}, 
-      ult:{name:'棍木之主', type:'self', desc:'队友全死时释放。召巨大棍木，加攻血上限。'} 
+      s2:{name:'小棍木来喽', type:'self', desc:'召2根棍木（替伤/加攻/回血）。'}, 
+      ult:{name:'槐木之主', type:'self', desc:'队友全死时释放。召巨大棍木，加攻血上限。'} 
     }, 
     passive:'【你们全都是棍木】：死时不复活。队友死加攻血。' 
   }, 
@@ -259,19 +247,10 @@ const TEMPLATES = {
       ult:{name:'获得管理员权限', type:'self', desc:'7碎片释放，技能全强化，立即行动。'} 
     }, 
     passive:'【权限碎片】：其他人行动或受影响获0.5碎片。' 
-  },
-  sujin: {
-    id:'sujin', name:'素锦', atk:7, maxHp:56,
-    skills:{
-      basic:{name:'普攻', type:'single', desc:'优先攻击血量最高的敌方单位，造成100% ATK。若连续攻击同一目标2次，额外造成一次3点真实伤害。'},
-      s1:{name:'王座', type:'single', desc:'对敌方单体造成60% ATK伤害，并使目标血量上限降低2点（死亡后恢复，最多降低6点）。'},
-      s2:{name:'爆血', type:'self', desc:'爆开1-3座剑碑，每座+2 ATK持续3回合；爆血期间不可生成剑碑；结束后1回合冷却。'},
-      ult:{name:'合纵', type:'self', desc:'累计造成72点伤害后可释放，释放后清空计数，每条命限1次。持续2轮，我方每人+4 ATK，期间敌方禁用大招。'}
-    },
-    passive:'【神碑护主】：每回合生成1座剑碑（最多7座，1血不可行动）。每座+1 ATK，素锦回合开始回2血。素锦死亡时若有剑碑则复活（每座5血），剑碑全碎。触发后剑碑仅在3心及以下生成，且神碑护主不可再触发。'
-  }
+  } 
 };
-const POOL = ['g', 'soup', 'dun', 'bi', 'luo', 'tao', 'ling', 'jianyun', 'sujin'];
+// 精卫(jing)暂时下架，不在可选池中；数据仍完整保留在 TEMPLATES 里。
+const POOL = ['g', 'soup', 'dun', 'bi', 'luo', 'tao', 'ling', 'jianyun'];
 
 /* ================== 全局状态 ================== */
 let selectedOrder = [];
@@ -302,11 +281,8 @@ function renderCodex() {
     div.className = 'codexCard';
     const enabled = POOL.includes(t.id);
 
-    // 素锦显示固定基础攻击力 7（战斗中的动态加成不影响图鉴）
-    const atkDisplay = (t.id === 'tao' || t.id === 'jianyun') ? '动态' : t.atk;
-
     let html = `<h2>${t.name}${enabled ? '' : '<span style="font-size:13px;color:#888;font-weight:normal;margin-left:8px;">（未开放）</span>'}</h2>
-      <div class="codexStat">攻击力：${atkDisplay}　生命值：${t.maxHp}</div>`;
+      <div class="codexStat">攻击力：${t.id==='tao'||t.id==='jianyun'?'动态':t.atk}　生命值：${t.maxHp}</div>`;
 
     const order = ['basic', 's1', 's2', 'ult'];
     const labels = { basic: '普攻', s1: '一技能', s2: '二技能', ult: '大招' };
@@ -337,9 +313,7 @@ function renderPool() {
     const t = TEMPLATES[id];
     const div = document.createElement('div');
     div.className = 'charCard' + (selectedOrder.includes(id) ? ' selected' : '');
-    // 素锦显示固定基础攻击力 7
-    const atkDisplay = (id === 'tao' || id === 'jianyun') ? '动态' : t.atk;
-    div.innerHTML = `<h3>${t.name}</h3><div>ATK: ${atkDisplay} | HP: ${t.maxHp}</div>`;
+    div.innerHTML = `<h3>${t.name}</h3><div>ATK: ${id==='tao'||id==='jianyun'?'动态':t.atk} | HP: ${t.maxHp}</div>`;
     div.onclick = () => {
       const idx = selectedOrder.indexOf(id);
       if (idx > -1) selectedOrder.splice(idx, 1);
@@ -391,8 +365,8 @@ function createChar(id, side, pos) {
   return {
     uid: side + '-' + pos + '-' + id, id, side, pos, name: t.name, baseAtk: t.atk, atk: t.atk,
     maxHp: t.maxHp, hp: t.maxHp, alive: true,
-    effects: { poison:0, duel:null, shield:0, domain:0, skipTurn:0, hope:0, blackRoom:0, blackRoomDmg:0, wan:0, fear:0, berserk:0, infinity:0, blackFlash:0, huaiMuHp:[], bigHuaiMu:null, blessing:0, offField:0, marked:false, xinYue:0, maxHpDown:0, swordSteles:0, baoxueActive:0, baoxueCooldown:0, baoxueBurst:0, heZongActive:0, heZongBuff:0 },
-    counters: { gDealt:0, gTaken:0, soupDmg:0, dunTaken:0, dunImmortalUsed:false, biSkills:0, luoShuaqi:0, jingCang:false, jingHe:false, jingUltUsed:false, jingCangChain:false, taoForm:0, taoRevived:0, taoTaken:0, lingDeadAlliesTracked:0, jianyunFragments:0, adminPrivilege:0, lastMarkedHp:0, sujinRevived:false, heZongDmg:0, heZongUsed:false, lastAttackUid:null, consecutiveHits:0 },
+    effects: { poison:0, duel:null, shield:0, domain:0, skipTurn:0, hope:0, blackRoom:0, blackRoomDmg:0, wan:0, fear:0, berserk:0, infinity:0, blackFlash:0, huaiMuHp:[], bigHuaiMu:null, blessing:0, offField:0, marked:false, xinYue:0 },
+    counters: { gDealt:0, gTaken:0, soupDmg:0, dunTaken:0, dunImmortalUsed:false, biSkills:0, luoShuaqi:0, jingCang:false, jingHe:false, jingUltUsed:false, jingCangChain:false, taoForm:0, taoRevived:0, taoTaken:0, lingDeadAlliesTracked:0, jianyunFragments:0, adminPrivilege:0, lastMarkedHp:0 },
     lastPassiveRound: 0
   };
 }
@@ -416,8 +390,7 @@ function startRound() {
   reviveList.forEach(c => {
     if (c.side && state.sides[c.side]) {
       c.alive = true; c.hp = c.maxHp; c.atk = c.baseAtk;
-      c.effects = { poison:0, duel:null, shield:0, domain:0, skipTurn:0, hope:0, blackRoom:0, blackRoomDmg:0, wan:0, fear:0, berserk:0, infinity:0, blackFlash:0, huaiMuHp:[], bigHuaiMu:null, blessing:0, offField:0, marked:false, xinYue:0, maxHpDown:0, swordSteles:0, baoxueActive:0, baoxueCooldown:0, baoxueBurst:0, heZongActive:0, heZongBuff:0 };
-      if (c.id === 'sujin') { c.counters.heZongUsed = false; c.counters.heZongDmg = 0; }
+      c.effects = { poison:0, duel:null, shield:0, domain:0, skipTurn:0, hope:0, blackRoom:0, blackRoomDmg:0, wan:0, fear:0, berserk:0, infinity:0, blackFlash:0, huaiMuHp:[], bigHuaiMu:null, blessing:0, offField:0, marked:false, xinYue:0 };
       log(`【复活】${displayName(c)} 复活`);
     }
   });
@@ -454,14 +427,6 @@ function startRound() {
     }
     if (c.effects.blessing > 0) c.effects.blessing--;
     if (c.effects.offField > 0) { c.effects.offField--; if (c.effects.offField===0) log(`${displayName(c)} 回到战场`); }
-    if (c.effects.heZongBuff > 0) {
-      c.effects.heZongBuff--;
-      if (c.effects.heZongBuff === 0) {
-        if (c.id === 'sujin') updateSujinAtk(c);
-        else c.atk = round1(Math.max(0, c.atk - 4));
-      }
-    }
-    if (c.effects.heZongActive > 0) c.effects.heZongActive--;
   });
 
   ['player', 'ai'].forEach(side => {
@@ -575,6 +540,7 @@ function processTurnStart(actor) {
   }
   if (state.gameOver || !actor.alive) return;
 
+  // 只给自己阵营的剪云加碎片
   const jianyunAlly = state.sides[actor.side].team.find(c => c.id === 'jianyun' && c.alive && c !== actor);
   if (jianyunAlly) addFragment(jianyunAlly, 0.5);
 
@@ -621,35 +587,6 @@ function processTurnStart(actor) {
       actor.hp = round1(Math.min(actor.maxHp, actor.hp + healAmt));
     }
     updateLingAtk(actor);
-  }
-
-  if (actor.id === 'sujin') {
-    if (actor.effects.baoxueCooldown > 0) {
-      actor.effects.baoxueCooldown--;
-    } else if (actor.effects.baoxueActive > 0) {
-      actor.effects.baoxueActive--;
-      if (actor.effects.baoxueActive === 0) {
-        actor.effects.baoxueBurst = 0;
-        actor.effects.baoxueCooldown = 2;
-        log(`【爆血】素锦的爆血效果结束，进入2回合冷却`);
-      }
-    }
-
-    if (actor.effects.baoxueActive === 0) {
-      const canGen = !actor.counters.sujinRevived || state.sides[actor.side].hearts <= 3;
-      if (canGen && actor.effects.swordSteles < 7) {
-        actor.effects.swordSteles++;
-        log(`【神碑护主】素锦生成1座剑碑（共${actor.effects.swordSteles}座）`);
-      }
-    }
-
-    if (actor.effects.swordSteles > 0) {
-      const heal = actor.effects.swordSteles * 2;
-      actor.hp = round1(Math.min(actor.maxHp, actor.hp + heal));
-      log(`【剑碑】${displayName(actor)} 回复${heal}点HP`);
-    }
-
-    updateSujinAtk(actor);
   }
 
   if (actor.id === 'tao') {
@@ -711,38 +648,7 @@ function finishTurn() {
 
 /* ================== 伤害结算 ================== */
 function dealDamage(source, target, amount, type='direct', skillName='', options = {}) {
-  if (!target || !target.alive || amount <= 0) return;
-  
-  // 攻击棍木：直接扣对应棍木血量
-  if (target.isMuTarget) {
-    let dmg = round1(amount);
-    const ling = target.parentLing;
-    if (!ling || !ling.alive) return;
-    
-    if (target.isBigMu) {
-      if (!ling.effects.bigHuaiMu) return;
-      ling.effects.bigHuaiMu.hp = round1(ling.effects.bigHuaiMu.hp - dmg);
-      log(`[棍木] ${source ? displayName(source) : '效果'} 攻击巨大棍木，造成 ${dmg} 点伤害（剩余 ${ling.effects.bigHuaiMu.hp}）`);
-      if (ling.effects.bigHuaiMu.hp <= 0) {
-        ling.effects.bigHuaiMu = null;
-        log(`【巨大棍木】碎裂！`);
-        updateLingAtk(ling);
-      }
-    } else {
-      const idx = target.muIndex;
-      if (idx < 0 || idx >= ling.effects.huaiMuHp.length) return;
-      ling.effects.huaiMuHp[idx] = round1(ling.effects.huaiMuHp[idx] - dmg);
-      log(`[棍木] ${source ? displayName(source) : '效果'} 攻击棍木，造成 ${dmg} 点伤害（剩余 ${ling.effects.huaiMuHp[idx]}）`);
-      if (ling.effects.huaiMuHp[idx] <= 0) {
-        ling.effects.huaiMuHp.splice(idx, 1);
-        log(`【棍木】碎裂了一根！`);
-        updateLingAtk(ling);
-      }
-    }
-    return;
-  }
-  
-  if (target.effects.offField > 0) return;
+  if (!target || !target.alive || amount <= 0 || target.effects.offField > 0) return;
   
   if (source && source.id === 'tao' && type !== 'true') amount = round1(target.hp * 0.1);
 
@@ -768,6 +674,7 @@ function dealDamage(source, target, amount, type='direct', skillName='', options
   // ===== 真实伤害 =====
   if (type === 'true') {
     const tao = state.sides[target.side].team.find(c => c.id === 'tao' && c.alive && c.effects.berserk > 0);
+    // 决斗隔离：外部桃桃不能转移决斗中角色的伤害
     if (tao && tao !== target && !isDuelProtected(tao, target)) {
       const taoDmg = round1(dmg * 0.8);
       const targetDmg = round1(dmg - taoDmg);
@@ -776,7 +683,6 @@ function dealDamage(source, target, amount, type='direct', skillName='', options
 
       target.hp = round1(target.hp - targetDmg);
       log(`[真实伤害] ${source ? displayName(source) : '效果'} 对 ${displayName(target)} 造成 ${targetDmg} 点真实伤害 (${skillName})`);
-      if (source && source.id === 'sujin') source.counters.heZongDmg = round1(source.counters.heZongDmg + targetDmg);
 
       tao.hp = round1(tao.hp - taoDmg);
       log(`[真实伤害] ${source ? displayName(source) : '效果'} 对 ${displayName(tao)} 造成 ${taoDmg} 点真实伤害 (${skillName})`);
@@ -801,7 +707,6 @@ function dealDamage(source, target, amount, type='direct', skillName='', options
       log(`[真实伤害] ${source ? displayName(source) : '效果'} 对 ${displayName(target)} 造成 ${dmg} 点真实伤害 (${skillName})`);
 
       if (source && source.id === 'g') source.counters.gDealt = round1(source.counters.gDealt + dmg);
-      if (source && source.id === 'sujin') source.counters.heZongDmg = round1(source.counters.heZongDmg + dmg);
       if (target.id === 'g') target.counters.gTaken = round1(target.counters.gTaken + dmg);
       if (target.id === 'dun') target.counters.dunTaken = round1(target.counters.dunTaken + dmg);
       if (target.id === 'tao') target.counters.taoTaken = round1(target.counters.taoTaken + dmg);
@@ -853,6 +758,7 @@ function dealDamage(source, target, amount, type='direct', skillName='', options
   }
 
   const tao = state.sides[target.side].team.find(c => c.id === 'tao' && c.alive && c.effects.berserk > 0);
+  // 决斗隔离：外部桃桃不能转移决斗中角色的伤害
   if (tao && tao !== target && !isDuelProtected(tao, target)) {
     const transfer = round1(dmg * 0.8);
     dmg = round1(dmg - transfer);
@@ -860,7 +766,43 @@ function dealDamage(source, target, amount, type='direct', skillName='', options
     dealDamage(source, tao, transfer, 'direct', '暴走转移');
   }
 
-  // 注：01 的棍木不承担伤害。攻击 01 时，01 直接承受伤害；棍木需被单独攻击才掉血。
+  if (target.id === 'ling') {
+    if (target.effects.huaiMuHp.length > 0) {
+      let absorbed = 0;
+      const isAoe = options.isAoe || false;
+      let hitCount = 0;
+
+      while (target.effects.huaiMuHp.length > 0 && dmg > 0) {
+        if (!isAoe && hitCount >= 1) break;
+
+        let hp = target.effects.huaiMuHp[0];
+        if (hp > dmg) {
+          target.effects.huaiMuHp[0] = round1(target.effects.huaiMuHp[0] - dmg);
+          absorbed = round1(absorbed + dmg); dmg = 0;
+          log(`【棍木】抵挡了 ${absorbed} 点伤害，当前棍木剩余血量：${target.effects.huaiMuHp.join(', ')}`);
+        } else {
+          absorbed = round1(absorbed + hp); dmg = round1(dmg - hp);
+          target.effects.huaiMuHp.shift();
+          hitCount++;
+          log(`【棍木】碎裂了一根，抵挡了 ${hp} 点伤害。`);
+          if (target.effects.huaiMuHp.length === 0) log(`【棍木】全部碎裂！`);
+        }
+      }
+      if (dmg > 0 && !isAoe && hitCount === 1) {
+        log(`[单体溢出] 溢出的 ${dmg} 点伤害直接作用于 ${displayName(target)}`);
+      }
+    } else if (target.effects.bigHuaiMu) {
+      let absorbed = round1(Math.min(target.effects.bigHuaiMu.hp, dmg));
+      target.effects.bigHuaiMu.hp = round1(target.effects.bigHuaiMu.hp - absorbed);
+      dmg = round1(dmg - absorbed);
+      if (absorbed > 0) log(`【巨大棍木】为 ${displayName(target)} 抵挡了 ${absorbed} 点伤害 (剩余HP:${target.effects.bigHuaiMu.hp})`);
+      if (target.effects.bigHuaiMu.hp <= 0) {
+        target.effects.bigHuaiMu = null;
+        log(`【巨大棍木】碎裂！`);
+      }
+    }
+    updateLingAtk(target);
+  }
 
   if (dmg <= 0) { render(); return; }
 
@@ -874,7 +816,6 @@ function dealDamage(source, target, amount, type='direct', skillName='', options
       if (!state.soupHistory) state.soupHistory = {};
       state.soupHistory[state.round] = round1((state.soupHistory[state.round] || 0) + dmg);
     }
-    if (source.id === 'sujin') source.counters.heZongDmg = round1(source.counters.heZongDmg + dmg);
   }
   if (target.id === 'g') target.counters.gTaken = round1(target.counters.gTaken + dmg);
   if (target.id === 'dun') target.counters.dunTaken = round1(target.counters.dunTaken + dmg);
@@ -895,33 +836,12 @@ function killCharacter(target, killer, isTrueKill = false) {
       log(`【不动明王】${displayName(dun)} 为 ${displayName(target)} 抵挡了致命伤害！`);
       return;
     }
-    if (target.id === 'sujin' && !target.counters.sujinRevived && target.effects.swordSteles > 0) {
-      const reviveHp = target.effects.swordSteles * 5;
-      const steles = target.effects.swordSteles;
-      log(`【神碑护主】${displayName(target)} 生命清零，${steles}座剑碑全部破碎！复活并回复${reviveHp}点HP`);
-      target.effects.swordSteles = 0;
-      target.effects.baoxueActive = 0;
-      target.effects.baoxueBurst = 0;
-      target.effects.baoxueCooldown = 2;
-      target.counters.sujinRevived = true;
-      target.counters.heZongDmg = 0;
-      target.counters.heZongUsed = false;
-      target.hp = round1(Math.min(target.maxHp, reviveHp));
-      updateSujinAtk(target);
-      return;
-    }
   } else {
-    log(`【机制抹杀】${displayName(target)} 被直接判定死亡，无视一切免死、转移与复活机制。`);
+    log(`【机制抹杀】${displayName(target)} 被直接判定死亡，无视一切免死与转移。`);
   }
 
   target.alive = false; target.hp = 0;
   log(`${displayName(target)} 死亡！`);
-
-  if (target.effects.maxHpDown > 0) {
-    target.maxHp = round1(target.maxHp + target.effects.maxHpDown);
-    log(`【王座】${displayName(target)} 的血量上限恢复（+${target.effects.maxHpDown}）`);
-    target.effects.maxHpDown = 0;
-  }
 
   if (target.id === 'tao' && target.effects.berserk > 0) {
     const allies = state.sides[target.side].team.filter(c => c !== target && c.alive);
@@ -973,6 +893,7 @@ function killCharacter(target, killer, isTrueKill = false) {
   }
 
   if (!isPermanentDeath) {
+    // 01 在场时，队友阵亡仍正常扣心，但不进入复活队列
     const lingInTeam = (target.id !== 'ling')
       ? state.sides[target.side].team.find(c => c.id === 'ling' && c.alive)
       : null;
@@ -1019,9 +940,11 @@ function checkGameOver() {
 function getAoeTargets(actor) {
   const enemies = state.sides[actor.side === 'player' ? 'ai' : 'player'].team
     .filter(c => c.alive && c.effects.offField === 0);
+  // 决斗中的人：AOE 也只能命中自己的决斗对手
   if (actor.effects.duel) {
     return enemies.filter(c => c.uid === actor.effects.duel.uid);
   }
+  // 未在决斗中的人：AOE 不会波及正在决斗中的敌人
   return enemies.filter(c => !c.effects.duel);
 }
 
@@ -1045,65 +968,17 @@ function getValidTargets(actor, skillKey) {
 
   const t = TEMPLATES[actor.id].skills[skillKey.split('_')[0]] || {type:'single'};
   
-  if (t.type === 'self' || (skillKey === 'ult' && ['tao','jing','ling','dun','jianyun','sujin'].includes(actor.id) && t.type !== 'ally')) return [actor];
+  if (t.type === 'self' || (skillKey === 'ult' && ['tao','jing','ling','dun','jianyun'].includes(actor.id) && t.type !== 'ally')) return [actor];
   if (t.type === 'aoe') return getAoeTargets(actor);
   if (t.type === 'ally') return state.sides[actor.side].team.filter(c => c.alive && c.effects.offField === 0);
   
   const enemies = state.sides[actor.side === 'player' ? 'ai' : 'player'].team.filter(c => c.alive && c.effects.offField === 0);
-  let validEnemies;
-  if (actor.effects.duel) validEnemies = enemies.filter(c => c.uid === actor.effects.duel.uid);
-  else validEnemies = enemies.filter(c => !c.effects.duel);
-  
-  const results = [...validEnemies];
-  
-  // 普攻可以攻击 01 的棍木（独立目标）
-  if (skillKey === 'basic' && !actor.effects.duel) {
-    validEnemies.forEach(e => {
-      if (e.id === 'ling') {
-        if (e.effects.bigHuaiMu) {
-          results.push({
-            uid: `${e.uid}-bigMu`, id: 'mu_target_big', name: '巨大棍木',
-            side: e.side, hp: e.effects.bigHuaiMu.hp, maxHp: 36, alive: true,
-            isMuTarget: true, isBigMu: true, parentLing: e,
-            effects: {}, counters: {}
-          });
-        }
-        e.effects.huaiMuHp.forEach((hp, i) => {
-          results.push({
-            uid: `${e.uid}-mu-${i}`, id: 'mu_target', name: '棍木',
-            side: e.side, hp, maxHp: 12, alive: true,
-            isMuTarget: true, muIndex: i, parentLing: e,
-            effects: {}, counters: {}
-          });
-        });
-      }
-    });
-  }
-  
-  return results;
+  if (actor.effects.duel) return enemies.filter(c => c.uid === actor.effects.duel.uid);
+  return enemies.filter(c => !c.effects.duel);
 }
 
 function executeSkill(actor, skillKey, target) {
   if (state.gameOver || !actor.alive) return;
-  
-  // 攻击棍木：仅做普攻伤害结算
-  if (target && target.isMuTarget) {
-    const side = state.sides[actor.side];
-    if (skillKey === 'basic') {
-      if (!(actor.id === 'jianyun' && actor.counters.adminPrivilege > 0)) {
-        side.sp = Math.min(5, side.sp + 1);
-      }
-    }
-    let dmg = actor.atk;
-    if (actor.id === 'ling' && skillKey === 'basic' && actor.hp < actor.maxHp * 0.8 && actor.counters.lingExtraSpRound !== state.round) {
-      side.sp = Math.min(5, side.sp + 1); actor.counters.lingExtraSpRound = state.round;
-    }
-    log(`${displayName(actor)} 使用【普攻】攻击棍木`);
-    dealDamage(actor, target, dmg, 'direct', '普攻');
-    render();
-    if (!state.gameOver) finishTurn();
-    return;
-  }
   
   const side = state.sides[actor.side];
   const t = TEMPLATES[actor.id];
@@ -1112,7 +987,6 @@ function executeSkill(actor, skillKey, target) {
   if (skillKey === 'jing_he') skillName = '赫';
   if (skillKey === 'tao_form1') skillName = '桃桃形态一';
   if (skillKey === 'tao_form2') skillName = '桃桃形态二';
-  if (skillKey.startsWith('sujin_baoxue_')) skillName = '爆血';
   
   if (actor.id === 'jianyun' && actor.counters.adminPrivilege > 0) {
     if (skillKey === 'basic') skillName = '蝶火燎原';
@@ -1128,7 +1002,7 @@ function executeSkill(actor, skillKey, target) {
       side.sp = Math.min(5, side.sp + 1);
     }
   }
-  else if (skillKey !== 'ult' && skillKey !== 'jing_he' && !skillKey.includes('tao_form') && !skillKey.includes('sujin_baoxue') && !(actor.id==='jianyun' && actor.counters.adminPrivilege > 0)) {
+  else if (skillKey !== 'ult' && skillKey !== 'jing_he' && !skillKey.includes('tao_form') && !(actor.id==='jianyun' && actor.counters.adminPrivilege > 0)) {
     side.sp = Math.max(0, side.sp - 1);
   }
   
@@ -1188,6 +1062,7 @@ function executeSkill(actor, skillKey, target) {
   else if (actor.id === 'g') {
     if (skillKey === 'basic') dealDamage(actor, target, actor.atk, 'direct', skillName);
     else if (skillKey === 's1') {
+      // 先进决斗（挂状态 + ATK+2），再结算 50% 伤害
       if (target) {
         actor.effects.duel = {uid:target.uid, side:target.side, rounds:4}; 
         target.effects.duel = {uid:actor.uid, side:actor.side, rounds:4}; 
@@ -1375,60 +1250,7 @@ function executeSkill(actor, skillKey, target) {
       actor.effects.bigHuaiMu = { hp: 36 };
       actor.maxHp = round1(actor.maxHp + 20); actor.hp = round1(actor.hp + 20);
       updateLingAtk(actor);
-      log(`【棍木之主】召唤巨大棍木，${displayName(actor)} 获得强化！`);
-    }
-  }
-  else if (actor.id === 'sujin') {
-    if (skillKey === 'basic') {
-      if (target) {
-        dealDamage(actor, target, actor.atk, 'direct', skillName);
-        if (actor.counters.lastAttackUid === target.uid) {
-          actor.counters.consecutiveHits = (actor.counters.consecutiveHits || 0) + 1;
-        } else {
-          actor.counters.lastAttackUid = target.uid;
-          actor.counters.consecutiveHits = 1;
-        }
-        if (actor.counters.consecutiveHits >= 2) {
-          log(`【连击】素锦对 ${displayName(target)} 连续攻击 ${actor.counters.consecutiveHits} 次，额外造成3点真实伤害`);
-          dealDamage(actor, target, 3, 'true', '连击');
-          actor.counters.consecutiveHits = 0;
-        }
-      }
-    }
-    else if (skillKey === 's1') {
-      if (target) {
-        dealDamage(actor, target, round1(actor.atk * 0.6), 'direct', skillName);
-        if (target.alive && target.effects.maxHpDown < 6) {
-          const down = Math.min(2, 6 - target.effects.maxHpDown);
-          target.effects.maxHpDown += down;
-          target.maxHp = round1(target.maxHp - down);
-          if (target.hp > target.maxHp) target.hp = target.maxHp;
-          log(`【王座】${displayName(target)} 血量上限降低${down}点（累计${target.effects.maxHpDown}/6）`);
-        }
-      }
-    }
-    else if (skillKey.startsWith('sujin_baoxue_')) {
-      side.sp = Math.max(0, side.sp - 1);
-      const numBurst = parseInt(skillKey.split('_')[2]);
-      actor.effects.swordSteles = Math.max(0, actor.effects.swordSteles - numBurst);
-      actor.effects.baoxueActive = 3;
-      actor.effects.baoxueBurst = numBurst;
-      updateSujinAtk(actor);
-      log(`【爆血】素锦爆开${numBurst}座剑碑，攻击力+${numBurst*2}持续3回合`);
-    }
-    else if (skillKey === 'ult') {
-      actor.counters.heZongDmg = 0;
-      actor.counters.heZongUsed = true;
-      actor.effects.heZongActive = 2;
-      const team = state.sides[actor.side].team;
-      team.forEach(c => {
-        if (c.alive) {
-          c.effects.heZongBuff = 2;
-          if (c.id !== 'sujin') c.atk = round1(c.atk + 4);
-        }
-      });
-      updateSujinAtk(actor);
-      log(`【合纵】素锦释放合纵！持续2轮，我方全体攻击力+4，敌方禁用大招`);
+      log(`【槐木之主】召唤巨大棍木，${displayName(actor)} 获得强化！`);
     }
   }
 
@@ -1464,24 +1286,6 @@ function showPlayerActions() {
   panel.innerHTML = '';
   const actor = state.currentActor;
   if (!actor) return;
-
-  if (state.pendingSkill === 'sujin_baoxue' && actor.id === 'sujin') {
-    const maxBurst = Math.min(3, actor.effects.swordSteles);
-    for (let i = 1; i <= maxBurst; i++) {
-      const b = document.createElement('button');
-      b.textContent = `爆开${i}座剑碑（+${i*2} ATK 3回合）`;
-      b.onclick = () => {
-        state.pendingSkill = null;
-        executeSkill(actor, 'sujin_baoxue_' + i, null);
-      };
-      panel.appendChild(b);
-    }
-    const back = document.createElement('button');
-    back.textContent = '← 返回';
-    back.onclick = () => { state.pendingSkill = null; render(); };
-    panel.appendChild(back);
-    return;
-  }
   
   if (actor.id === 'tao' && actor.counters.taoForm === 1) {
     const b1 = document.createElement('button'); b1.textContent = '形态一：耗10血，敌全体5真伤'; b1.onclick = () => { actor.counters.taoForm=0; executeSkill(actor, 'tao_form1', null); }; panel.appendChild(b1);
@@ -1518,10 +1322,6 @@ function showPlayerActions() {
     else skills.push({ key: 's1', label: `一技能 ${TEMPLATES[actor.id].skills.s1.name}`, disabled: !canS1 });
     
     if (actor.id === 'jing') skills.push({ key: 's2', label: '二技能 虚式·茈', disabled: !(actor.counters.jingCang && actor.counters.jingHe && state.sides[actor.side].sp >= 2) });
-    else if (actor.id === 'sujin') {
-      const canBao = actor.effects.swordSteles > 0 && actor.effects.baoxueActive === 0 && actor.effects.baoxueCooldown === 0 && state.sides[actor.side].sp >= 1;
-      skills.push({ key: 's2', label: `二技能 爆血（${actor.effects.swordSteles}座剑碑）`, disabled: !canBao });
-    }
     else skills.push({ key: 's2', label: `二技能 ${TEMPLATES[actor.id].skills.s2.name}`, disabled: state.sides[actor.side].sp < 1 });
 
     let ultUsable = false;
@@ -1534,9 +1334,7 @@ function showPlayerActions() {
     if (actor.id === 'jing') ultUsable = !actor.counters.jingUltUsed;
     if (actor.id === 'ling') ultUsable = state.sides[actor.side].team.filter(c=>c.alive).length === 1;
     if (actor.id === 'jianyun') ultUsable = actor.counters.jianyunFragments >= 7;
-    if (actor.id === 'sujin') ultUsable = actor.counters.heZongDmg >= 72 && !actor.counters.heZongUsed;
-    const ultBlocked = isUltBlocked(actor);
-    skills.push({ key: 'ult', label: `大招 ${TEMPLATES[actor.id].skills.ult.name}`, disabled: !ultUsable || ultBlocked });
+    skills.push({ key: 'ult', label: `大招 ${TEMPLATES[actor.id].skills.ult.name}`, disabled: !ultUsable });
   }
 
   skills.forEach(sk => {
@@ -1544,7 +1342,6 @@ function showPlayerActions() {
     btn.textContent = sk.label; btn.disabled = sk.disabled;
     btn.onclick = () => { 
       if (sk.key === 's1' && actor.id === 'jing') { state.pendingSkill = 'jing_s1'; render(); } 
-      else if (sk.key === 's2' && actor.id === 'sujin') { state.pendingSkill = 'sujin_baoxue'; render(); }
       else promptTarget(actor, sk.key); 
     };
     panel.appendChild(btn);
@@ -1554,14 +1351,6 @@ function showPlayerActions() {
 function promptTarget(actor, skillKey) {
   if (actor.id === 'tao' && skillKey === 's2') {
     executeSkill(actor, skillKey, null);
-    return;
-  }
-
-  if (actor.id === 'sujin' && skillKey === 'basic') {
-    const valid = getValidTargets(actor, skillKey);
-    if (valid.length === 0) { executeSkill(actor, skillKey, null); return; }
-    const tgt = valid.sort((a, b) => b.hp - a.hp)[0];
-    executeSkill(actor, skillKey, tgt);
     return;
   }
 
@@ -1599,13 +1388,7 @@ function aiAct(actor) {
     skills.push('basic');
   } else {
     if (side.sp >= 1 && !(actor.id==='g'&&actor.effects.duel)) skills.push('s1');
-    if (side.sp >= 1) {
-      if (actor.id === 'sujin') {
-        if (actor.effects.swordSteles > 0 && actor.effects.baoxueActive === 0 && actor.effects.baoxueCooldown === 0) skills.push('s2');
-      } else {
-        skills.push('s2');
-      }
-    }
+    if (side.sp >= 1) skills.push('s2');
     if (side.sp >= 2 && actor.id==='jing' && actor.counters.jingCang && actor.counters.jingHe) skills.push('s2');
     skills.push('basic');
   }
@@ -1622,21 +1405,10 @@ function aiAct(actor) {
   if (actor.id === 'jing') canUlt = !actor.counters.jingUltUsed;
   if (actor.id === 'ling') canUlt = side.team.filter(c=>c.alive).length === 1;
   if (actor.id === 'jianyun') canUlt = actor.counters.jianyunFragments >= 7;
-  if (actor.id === 'sujin') canUlt = actor.counters.heZongDmg >= 72 && !actor.counters.heZongUsed;
   
-  if (canUlt && !isUltBlocked(actor) && Math.random() < 0.8) sk = 'ult';
+  if (canUlt && Math.random() < 0.8) sk = 'ult';
   if (actor.id === 'jing' && sk === 's1') sk = Math.random() < 0.5 ? 'jing_cang' : 'jing_he';
   if (actor.id === 'tao' && sk === 's2') sk = Math.random() < 0.5 ? 'tao_form1' : 'tao_form2';
-
-  if (actor.id === 'sujin' && sk === 's2') {
-    const maxBurst = Math.min(3, actor.effects.swordSteles);
-    if (maxBurst > 0) {
-      const numBurst = Math.max(1, Math.ceil(Math.random() * maxBurst));
-      executeSkill(actor, 'sujin_baoxue_' + numBurst, null);
-      return;
-    }
-    sk = 'basic';
-  }
   
   let target = null;
   const t = TEMPLATES[actor.id].skills[sk.split('_')[0]];
@@ -1645,18 +1417,13 @@ function aiAct(actor) {
     return;
   }
 
-  // AI 不攻击棍木：过滤掉 mu_target
-  const valid = getValidTargets(actor, sk).filter(t => !t.isMuTarget);
+  const valid = getValidTargets(actor, sk);
   if (valid.length > 0) {
-    if (actor.id === 'sujin' && sk === 'basic') {
-      target = valid.sort((a,b) => b.hp - a.hp)[0];
+    const tType = TEMPLATES[actor.id].skills[sk.split('_')[0]]?.type;
+    if (tType === 'ally' || (sk === 'jing_cang' && Math.random() < 0.3) || sk === 's1') {
+       target = valid.sort((a,b) => b.atk - a.atk)[0];
     } else {
-      const tType = TEMPLATES[actor.id].skills[sk.split('_')[0]]?.type;
-      if (tType === 'ally' || (sk === 'jing_cang' && Math.random() < 0.3) || sk === 's1') {
-         target = valid.sort((a,b) => b.atk - a.atk)[0];
-      } else {
-         target = valid.sort((a,b) => a.hp - b.hp)[0];
-      }
+       target = valid.sort((a,b) => a.hp - b.hp)[0];
     }
   }
   
@@ -1683,6 +1450,7 @@ function render() {
   if (state.gameOver) return;
   if (!state.currentActor || state.currentActor.side !== 'player') return;
 
+  // 目标选择中：显示返回键，防止误点
   if (state.pendingSkill && typeof state.pendingSkill === 'object') {
     const backBtn = document.createElement('button');
     backBtn.textContent = '← 返回（取消选择）';
@@ -1737,14 +1505,6 @@ function renderTeam(side) {
     if(e.marked) b.push(`『 』标记`);
     if(e.xinYue>0) b.push(`新月盈满${e.xinYue}`);
     if(c.counters.adminPrivilege>0) b.push(`管理员权限`);
-    if(e.maxHpDown>0) b.push(`血上限-${e.maxHpDown}`);
-    if(c.id==='sujin') {
-      if(e.swordSteles>0) b.push(`剑碑x${e.swordSteles}`);
-      if(e.baoxueActive>0) b.push(`爆血${e.baoxueActive}回(+${e.baoxueBurst*2}ATK)`);
-      if(e.baoxueCooldown>0) b.push(`爆血冷却${e.baoxueCooldown}`);
-      if(e.heZongActive>0) b.push(`合纵${e.heZongActive}`);
-    }
-    if(e.heZongBuff>0 && c.id!=='sujin') b.push(`合纵+4攻${e.heZongBuff}`);
     
     let extra = '';
     if(c.id==='g') extra = `大招: ${c.counters.gDealt}/72 或 ${c.counters.gTaken}/64`;
@@ -1754,12 +1514,11 @@ function renderTeam(side) {
     if(c.id==='luo') extra = `耍起: ${c.counters.luoShuaqi}/15`;
     if(c.id==='tao') extra = `受击: ${state.globalDamageTaken[side]}/91`;
     if(c.id==='jianyun') extra = `碎片: ${c.counters.jianyunFragments}`;
-    if(c.id==='sujin') extra = `合纵伤害: ${c.counters.heZongDmg}/72${c.counters.heZongUsed?'（已使用）':''}`;
 
     div.innerHTML = `
       <div style="display:flex; justify-content:space-between;">
         <b>${c.name} (${c.pos+1}号位)</b>
-        <span>ATK: ${c.atk}</span>
+        <span>ATK: ${c.id==='tao'||c.id==='jianyun'?'动态':c.atk}</span>
       </div>
       <div class="hp-bar"><div class="hp-fill" style="width:${Math.max(0,(c.hp/c.maxHp)*100)}%"></div></div>
       <div>HP: ${c.hp}/${c.maxHp}</div>
@@ -1767,52 +1526,6 @@ function renderTeam(side) {
       <div style="color:#7fd4ff; font-size:11px; margin-top:4px;">${extra}</div>
     `;
     el.appendChild(div);
-    
-    // 01 的棍木子卡片
-    if (c.id === 'ling' && c.alive) {
-      if (c.effects.bigHuaiMu) {
-        const bigMu = document.createElement('div');
-        bigMu.className = 'mu-card';
-        bigMu.innerHTML = `<b>🪵 巨大棍木</b> HP: ${c.effects.bigHuaiMu.hp}/36`;
-        if (state.pendingSkill && typeof state.pendingSkill === 'object') {
-          const valid = getValidTargets(state.pendingSkill.actor, state.pendingSkill.skillKey);
-          if (valid.some(t => t.uid === `${c.uid}-bigMu`)) {
-            bigMu.classList.add('selectable');
-          }
-        }
-        bigMu.onclick = (ev) => {
-          ev.stopPropagation();
-          onTargetClick({
-            uid: `${c.uid}-bigMu`, id: 'mu_target_big', name: '巨大棍木',
-            side: c.side, hp: c.effects.bigHuaiMu.hp, maxHp: 36, alive: true,
-            isMuTarget: true, isBigMu: true, parentLing: c,
-            effects: {}, counters: {}
-          });
-        };
-        el.appendChild(bigMu);
-      }
-      c.effects.huaiMuHp.forEach((hp, i) => {
-        const mu = document.createElement('div');
-        mu.className = 'mu-card';
-        mu.innerHTML = `<b>🪵 棍木${i+1}</b> HP: ${hp}/12`;
-        if (state.pendingSkill && typeof state.pendingSkill === 'object') {
-          const valid = getValidTargets(state.pendingSkill.actor, state.pendingSkill.skillKey);
-          if (valid.some(t => t.uid === `${c.uid}-mu-${i}`)) {
-            mu.classList.add('selectable');
-          }
-        }
-        mu.onclick = (ev) => {
-          ev.stopPropagation();
-          onTargetClick({
-            uid: `${c.uid}-mu-${i}`, id: 'mu_target', name: '棍木',
-            side: c.side, hp, maxHp: 12, alive: true,
-            isMuTarget: true, muIndex: i, parentLing: c,
-            effects: {}, counters: {}
-          });
-        };
-        el.appendChild(mu);
-      });
-    }
   });
 }
 
