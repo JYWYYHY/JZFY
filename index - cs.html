@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>九中风云</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Microsoft YaHei", sans-serif; background: #12121a; color: #eee; min-height: 100vh; }
+  #app { max-width: 1300px; margin: 0 auto; padding: 16px; }
+  button { background: #3a3a5c; color: #fff; border: 1px solid #666; border-radius: 6px; padding: 8px 12px; margin: 4px; cursor: pointer; font-size: 13px; transition: 0.2s; }
+  button:hover:not(:disabled) { background: #505080; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  
+  .page { display: none; }
+  .page.active { display: block; }
+  #page-menu.active { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 85vh; text-align: center; }
+  
+  .gameTitle { font-size: 56px; font-weight: 900; letter-spacing: 10px; background: linear-gradient(90deg, #ffd966, #ff8a5c, #7fd4ff); -webkit-background-clip: text; color: transparent; margin-bottom: 40px; }
+  .menuButtons { display: flex; flex-direction: column; gap: 14px; width: 260px; }
+  .menuButtons button { font-size: 18px; padding: 14px; border-radius: 10px; background: #26264a; letter-spacing: 3px; }
+  
+  .pageHeader { display: flex; justify-content: space-between; border-bottom: 1px solid #444; padding-bottom: 8px; margin-bottom: 14px; align-items: center; }
+  .pageHeader h2 { margin: 0; color: #ffd966; }
+  
+  .codexWrap { display: flex; gap: 16px; flex-wrap: wrap; }
+  .codexCard { flex: 1; min-width: 320px; background: #1c1c2c; border: 1px solid #3a3a55; border-radius: 12px; padding: 16px; margin-bottom: 10px; }
+  .codexCard h2 { color: #ffd966; margin-top: 0; }
+  .codexStat { color: #7fd4ff; margin-bottom: 10px; font-weight: bold; }
+  .skillRow { border-top: 1px dashed #333; padding: 8px 0; font-size: 13px; line-height: 1.6; }
+  .skillName { color: #ff9d6b; font-weight: bold; }
+
+  .pool { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+  .charCard { border: 1px solid #444; border-radius: 8px; padding: 10px; background: #1c1c2c; min-width: 150px; cursor: pointer; transition: 0.2s; user-select: none; }
+  .charCard.selected { border-color: #4caf50; box-shadow: 0 0 10px rgba(76,175,80,0.5); background: #1e3020; }
+  .charCard.disabled { opacity: 0.5; cursor: not-allowed; }
+  
+  .battlefield { display: flex; justify-content: space-between; gap: 20px; margin: 16px 0; }
+  .side { flex: 1; background: #1c1c2c; padding: 10px; border-radius: 10px; border: 1px solid #333; }
+  .team { display: flex; flex-direction: column; gap: 8px; }
+  .battle-card { border: 1px solid #555; border-radius: 8px; padding: 8px; background: #24243a; font-size: 12px; position: relative; transition: 0.2s; }
+  .battle-card.player { border-left: 4px solid #4a9eff; }
+  .battle-card.ai { border-left: 4px solid #ff5c5c; }
+  .battle-card.active { border-color: gold; box-shadow: 0 0 10px gold; }
+  .battle-card.dead { opacity: 0.3; }
+  .battle-card.offField { opacity: 0.3; border: 2px dashed #888; }
+  .battle-card.selectable { cursor: pointer; border: 2px solid #4caf50; box-shadow: 0 0 10px #4caf50; }
+  .hp-bar { height: 6px; background: #333; border-radius: 3px; margin: 4px 0; overflow: hidden; }
+  .hp-fill { height: 100%; background: #ff5c5c; transition: 0.2s; }
+  .buffs { color: #aaa; margin-top: 4px; line-height: 1.4; word-break: break-all; font-size: 11px; }
+  
+  .topbar { display: flex; flex-wrap: wrap; gap: 10px; background: #202030; padding: 10px; border-radius: 8px; font-size: 14px; border: 1px solid #444; }
+  #log { height: 200px; overflow-y: auto; background: #101018; border: 1px solid #444; border-radius: 8px; padding: 8px; font-size: 13px; margin-top: 10px; }
+  #log div { border-bottom: 1px dashed #222; padding: 3px 0; }
+  #actionPanel { background: #202030; padding: 10px; border-radius: 8px; border: 1px solid #444; margin-top: 10px; }
+  .skill-btn-group { display: flex; flex-wrap: wrap; gap: 6px; }
+  
+  #gameOverBanner { display: none; background: #1c1c2c; border: 2px solid #ffd966; border-radius: 10px; padding: 20px; text-align: center; margin: 16px 0; box-shadow: 0 0 20px rgba(255,217,102,0.3); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="page-menu" class="page active">
+    <div class="gameTitle">九中风云</div>
+    <div class="menuButtons">
+      <button onclick="showPage('page-battle')">进入战斗</button>
+      <button onclick="showPage('page-guide')">玩法介绍</button>
+      <button onclick="showPage('page-codex')">角色图鉴</button>
+      <button onclick="showPage('page-team')">制作团队</button>
+    </div>
+  </div>
+
+  <div id="page-guide" class="page">
+    <div class="pageHeader"><h2>玩法介绍</h2><button onclick="showPage('page-menu')">← 返回主页</button></div>
+    <div style="background:#1c1c2c; padding:16px; border-radius:10px; line-height:1.8;">
+      <p>1. 双方各选 3 名角色，队伍内不可重复。</p>
+      <p>2. 技能点上限 5 点，初始 3 点。普攻 +1，一二技能 -1。</p>
+      <p>3. 双方初始拥有 5 颗心。角色死亡扣 1 颗心并在下轮复活。</p>
+      <p>4. 若当前心数为 0，角色死亡后不再复活（彻底死亡）。</p>
+      <p>5. 当一方场上角色全部阵亡，且无等待复活的角色时，该方判负。</p>
+      <p>6. 真实伤害无视护盾、无视增减伤。机制抹杀无视任何保命手段。</p>
+    </div>
+  </div>
+
+  <div id="page-team" class="page">
+    <div class="pageHeader"><h2>制作团队</h2><button onclick="showPage('page-menu')">← 返回主页</button></div>
+    <div style="background:#1c1c2c; padding:30px; border-radius:10px; text-align:center; line-height:2.5; font-size:16px;">
+      <h3 style="color:#ffd966; font-size:24px; margin-bottom: 20px;">九中风云</h3>
+      <p><b>游戏设计：</b>闭春寒</p>
+      <p><b>角色设计：</b>闭春寒，剪云舞影月华悠，落空，素锦，吃颗桃挑，鲱鱼</p>
+    </div>
+  </div>
+
+  <div id="page-codex" class="page">
+    <div class="pageHeader"><h2>角色图鉴</h2><button onclick="showPage('page-menu')">← 返回主页</button></div>
+    <div class="codexWrap" id="codexWrap"></div>
+  </div>
+
+  <div id="page-battle" class="page">
+    <div class="pageHeader"><h2>选择出战角色（3名）</h2><button onclick="showPage('page-menu')">← 返回主页</button></div>
+    <div class="pool" id="charPool"></div>
+    <div style="display:flex; justify-content:space-between; align-items:center; background:#1c1c2c; padding:10px; border-radius:8px;">
+      <div>已选顺序：<span id="selectedNames" style="color:#4caf50; font-weight:bold;">未选择</span></div>
+      <button id="startBtn" onclick="startGame()" disabled style="background:#2e7d32; font-size:16px; padding:10px 20px;">开始战斗</button>
+    </div>
+  </div>
+
+  <div id="page-game" class="page">
+    <div class="pageHeader"><h2>九中风云 · 战斗</h2><button onclick="showPage('page-menu')">← 返回主页</button></div>
+    
+    <div id="gameOverBanner">
+      <h2 id="bannerTitle" style="margin:0; color:#ffd966;">游戏结束</h2>
+      <p id="bannerSub" style="color:#aaa;"></p>
+      <button onclick="startGame()" style="background:#2e7d32;">再来一局</button>
+      <button onclick="showPage('page-menu')">返回主页</button>
+    </div>
+
+    <div class="topbar">
+      <div>轮次：<span id="round">1</span></div>
+      <div>当前行动：<span id="currentActor" style="color:gold;">-</span></div>
+      <div>玩家技能点：<span id="pSP" style="color:#4a9eff;">3</span>/5</div>
+      <div>AI技能点：<span id="aSP" style="color:#ff5c5c;">3</span>/5</div>
+      <div>玩家心：<span id="pHearts">5</span> <span id="pError" style="color:#ff4444;font-size:12px;"></span></div>
+      <div>AI心：<span id="aHearts">5</span> <span id="aError" style="color:#ff4444;font-size:12px;"></span></div>
+    </div>
+
+    <div class="battlefield">
+      <div class="side"><h3>AI</h3><div class="team" id="aiTeam"></div></div>
+      <div class="side"><h3>玩家</h3><div class="team" id="playerTeam"></div></div>
+    </div>
+
+    <div id="actionPanel">
+      <h3 style="margin-top:0;">技能选择 <span id="targetHint" style="color:gold; font-size:14px;"></span></h3>
+      <div class="skill-btn-group" id="skillButtons"></div>
+    </div>
+
+    <h3>战斗日志</h3>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+/* ================== 工具函数 ================== */
+function round1(n) { return Number(n.toFixed(1)); }
+
+function findCharByUid(uid) {
+  if (!uid) return null;
+  return state.sides.player.team.concat(state.sides.ai.team).find(c => c.uid === uid) || null;
+}
+
+// 决斗隔离判断：非回血/非加盾效果均需通过此检查
+function isDuelProtected(actor, target) {
+  if (!target || !target.effects || !target.effects.duel) return false;
+  if (actor && actor.uid === target.uid) return false;
+  if (actor && actor.uid === target.effects.duel.uid) return false;
+  return true;
+}
+
+/* ================== 角色数据（精卫完整保留） ================== */
+const TEMPLATES = {
+  g: { 
+    id:'g', name:'G哥', atk:8, maxHp:48, 
+    skills:{ 
+      basic:{name:'普攻', type:'single', desc:'对敌方单体造成100%直伤，恢复1技能点。'}, 
+      s1:{name:'来单', type:'single', desc:'消耗1技能点。指定敌方单体与其进入『决斗』，造成50%伤害。『决斗』内G哥ATK+2。'}, 
+      s2:{name:'肘飞来', type:'single', desc:'消耗1技能点。对敌方单体造成120%伤害。'}, 
+      ult:{name:'燃尽了', type:'single', desc:'累积造成72伤或累积受64伤可释放。自身降至5血，造成400%伤害。若击杀，溢出伤害50%分摊。全体队友回8血。'} 
+    }, 
+    passive:'【再来再来】：决斗击杀回5血并获额外回合；被击杀降敌攻。4轮无死亡退出决斗。' 
+  }, 
+  soup: { 
+    id:'soup', name:'鸡汤', atk:6, maxHp:56, 
+    skills:{ 
+      basic:{name:'普攻', type:'single', desc:'对敌方单体造成100%直伤，恢复1技能点。'}, 
+      s1:{name:'毒化', type:'aoe', desc:'消耗1技能点，对全体造成50%直伤并施加3轮毒化。'}, 
+      s2:{name:'鸡汤来喽', type:'single', desc:'消耗1技能点，对敌方单体造成120%直伤。'}, 
+      ult:{name:'浸泡在十公升的汤里', type:'aoe', desc:'累计造成70点直伤后可释放。对敌方全体造成前3轮伤害总和60%的伤害，均摊。'} 
+    }, 
+    passive:'【别emo了来碗鸡汤】：每3轮开始时，为我方全体回复4点血。' 
+  }, 
+  dun: { 
+    id:'dun', name:'墩子', atk:2, maxHp:72, 
+    skills:{ 
+      basic:{name:'普攻', type:'single', desc:'对敌方单体造成100%直伤，恢复1技能点。'}, 
+      s1:{name:'墩↗墩↘墩↗墩↘', type:'self', desc:'为我方全体提供6点护盾。'}, 
+      s2:{name:'通透世界', type:'self', desc:'领域展开持续3轮。期间减伤15%，10%概率免疫伤害，3%概率反伤。全队获1点护盾。'}, 
+      ult:{name:'墩子？墩子。墩子！', type:'ally', desc:'累计受击120后可释放。将敌方全体攻击降至与墩子相同，为单体提供20点护盾。'} 
+    }, 
+    passive:'【不动明王】：免死一次。全队有5%减伤。' 
+  }, 
+  bi: { 
+    id:'bi', name:'闭春寒', atk:1, maxHp:66, 
+    skills:{ 
+      basic:{name:'普攻', type:'aoe', desc:'对敌方全体造成100%直伤，恢复1技能点。'}, 
+      s1:{name:'赞美七休日', type:'single', desc:'消耗1技能点。60%概率200%伤，20%概率400%伤，19%概率放假1轮，1%概率放假7轮。回8血。'}, 
+      s2:{name:'王从天降，愤怒狰狞', type:'aoe', desc:'消耗1技能点。造成全队攻击力160%的伤害，均摊。'}, 
+      ult:{name:'神临', type:'single', desc:'释放5次技能后可释放。机制抹杀一名敌方角色（无视免死、减伤、护盾与暴走转移），闭春寒回其生命上限80%的血，回1技能点。'} 
+    }, 
+    passive:'【亡命之徒】：死时不扣心，全队回15血、+4攻、回5技能点。无法复活。' 
+  }, 
+  luo: { 
+    id:'luo', name:'落空', atk:4, maxHp:58, 
+    skills:{ 
+      basic:{name:'普攻', type:'aoe', desc:'对敌方全体造成50%直伤，恢复1技能点。'}, 
+      s1:{name:'希冀不能落空', type:'ally', desc:'消耗1技能点。给队友施加2层希冀（+4攻）。'}, 
+      s2:{name:'宝贝回家', type:'single', desc:'消耗1技能点。造成50%伤并施加小黑屋（易伤10%）。'}, 
+      ult:{name:'我们三个真厉害', type:'ally', desc:'15耍起后释放。给队友施加“我也要玩”（附伤20%）。'} 
+    }, 
+    passive:'【我相信你】：死时全队获祝福减伤。低血时普攻额外回点。' 
+  }, 
+  tao: { 
+    id:'tao', name:'吃颗桃挑', atk:0, maxHp:69, 
+    skills:{ 
+      basic:{name:'普攻', type:'single', desc:'对敌方单体造成其当前HP 10%的直伤，恢复1技能点。'}, 
+      s1:{name:'血潮', type:'self', desc:'消耗1技能点。扣自身10血，全队回15血。'}, 
+      s2:{name:'吃个桃桃', type:'self', desc:'消耗1技能点。选择形态一或二。'}, 
+      ult:{name:'狂欢之夜', type:'self', desc:'我方受击91后可释放。自身变30血，清空敌方技能点，施加2轮恐惧。'} 
+    }, 
+    passive:'【向死而生】：队友低血触发暴走，转移伤害。暴走死亡可保队友。' 
+  }, 
+  jing: { 
+    id:'jing', name:'精卫', atk:6, maxHp:50, 
+    skills:{ 
+      basic:{name:'五条悟打拳', type:'single', desc:'造成100%伤，附黑闪。'}, 
+      s1:{name:'术式顺转/反转', type:'single', desc:'苍：耗1点，全体80%伤或友方再动。赫：耗2血，单体150%伤。'}, 
+      s2:{name:'虚式·茈', type:'single', desc:'苍赫各一次后释放。耗2点，200%单体+100%群伤。'}, 
+      ult:{name:'无量空处', type:'self', desc:'敌停1轮。下个技能免消耗，获额外回合，附2黑闪。'} 
+    }, 
+    passive:'【无下限/反转术式】：每层无下限减伤2.5%。行动回2血。黑闪加伤。' 
+  }, 
+  ling: { 
+    id:'ling', name:'01', atk:4, maxHp:54, 
+    skills:{ 
+      basic:{name:'普攻', type:'single', desc:'造成100%伤，回5血。'}, 
+      s1:{name:'棍木啊', type:'aoe', desc:'对全体造成100%伤。'}, 
+      s2:{name:'小棍木来喽', type:'self', desc:'召2根棍木（替伤/加攻/回血）。'}, 
+      ult:{name:'槐木之主', type:'self', desc:'队友全死时释放。召巨大棍木，加攻血上限。'} 
+    }, 
+    passive:'【你们全都是棍木】：死时不复活。队友死加攻血。' 
+  }, 
+  jianyun: { 
+    id:'jianyun', name:'剪云', atk:0, maxHp:42, 
+    skills:{ 
+      basic:{name:'检索HP', type:'single', desc:'7点真伤，获1点碎片。'}, 
+      s1:{name:'更改HP', type:'ally', desc:'回7血（可超上限至50），获1点碎片。'}, 
+      s2:{name:'【 】', type:'single', desc:'3伤，施加『 』标记。'}, 
+      ult:{name:'获得管理员权限', type:'self', desc:'7碎片释放，技能全强化，立即行动。'} 
+    }, 
+    passive:'【权限碎片】：其他人行动或受影响获0.5碎片。' 
+  } 
+};
+// 精卫(jing)暂时下架，不在可选池中；数据仍完整保留在 TEMPLATES 里。
+const POOL = ['g', 'soup', 'dun', 'bi', 'luo', 'tao', 'ling', 'jianyun'];
+
+/* ================== 全局状态 ================== */
+let selectedOrder = [];
+let state = {
+  round: 1, turnIndex: 0, order: [], firstSide: 'player',
+  sides: { 
+    player: { hearts: 5, errorHearts: 0, sp: 3, team: [] }, 
+    ai: { hearts: 5, errorHearts: 0, sp: 3, team: [] } 
+  },
+  gameOver: false, currentActor: null, pendingSkill: null, logs: [], globalDamageTaken: { player: 0, ai: 0 }, soupHistory: {}, pendingRevive: [], extraActorUid: null, extraTurnFromCang: false
+};
+
+/* ================== 页面控制 ================== */
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'page-codex') renderCodex();
+}
+
+/* ================== 图鉴渲染 ================== */
+function renderCodex() {
+  const wrap = document.getElementById('codexWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+
+  Object.values(TEMPLATES).forEach(t => {
+    const div = document.createElement('div');
+    div.className = 'codexCard';
+    const enabled = POOL.includes(t.id);
+
+    let html = `<h2>${t.name}${enabled ? '' : '<span style="font-size:13px;color:#888;font-weight:normal;margin-left:8px;">（未开放）</span>'}</h2>
+      <div class="codexStat">攻击力：${t.id==='tao'||t.id==='jianyun'?'动态':t.atk}　生命值：${t.maxHp}</div>`;
+
+    const order = ['basic', 's1', 's2', 'ult'];
+    const labels = { basic: '普攻', s1: '一技能', s2: '二技能', ult: '大招' };
+
+    order.forEach(k => {
+      const sk = t.skills[k];
+      html += `<div class="skillRow">
+        <div><span class="skillName">${labels[k]}·${sk.name}</span></div>
+        <div>${sk.desc}</div>
+      </div>`;
+    });
+
+    html += `<div class="skillRow">
+      <div><span class="skillName">被动</span></div>
+      <div>${t.passive}</div>
+    </div>`;
+
+    div.innerHTML = html;
+    wrap.appendChild(div);
+  });
+}
+
+/* ================== 选人逻辑 ================== */
+function renderPool() {
+  const poolDiv = document.getElementById('charPool');
+  poolDiv.innerHTML = '';
+  POOL.forEach(id => {
+    const t = TEMPLATES[id];
+    const div = document.createElement('div');
+    div.className = 'charCard' + (selectedOrder.includes(id) ? ' selected' : '');
+    div.innerHTML = `<h3>${t.name}</h3><div>ATK: ${id==='tao'||id==='jianyun'?'动态':t.atk} | HP: ${t.maxHp}</div>`;
+    div.onclick = () => {
+      const idx = selectedOrder.indexOf(id);
+      if (idx > -1) selectedOrder.splice(idx, 1);
+      else if (selectedOrder.length < 3) selectedOrder.push(id);
+      renderPool();
+      updateStartBtn();
+    };
+    poolDiv.appendChild(div);
+  });
+}
+function updateStartBtn() {
+  document.getElementById('selectedNames').textContent = selectedOrder.map(id => TEMPLATES[id].name).join(' → ') || '未选择';
+  document.getElementById('startBtn').disabled = selectedOrder.length !== 3;
+}
+
+/* ================== 游戏初始化 ================== */
+let isStarting = false;
+function startGame() {
+  if (isStarting || selectedOrder.length !== 3) return;
+  isStarting = true;
+  showPage('page-game');
+  document.getElementById('gameOverBanner').style.display = 'none';
+  
+  const aiOrder = POOL.slice().sort(() => Math.random() - 0.5).slice(0, 3);
+  
+  state = {
+    round: 1, turnIndex: 0, order: [], firstSide: Math.random() < 0.5 ? 'player' : 'ai',
+    sides: { 
+      player: { hearts: 5, errorHearts: 0, sp: 3, team: [] }, 
+      ai: { hearts: 5, errorHearts: 0, sp: 3, team: [] } 
+    },
+    gameOver: false, currentActor: null, pendingSkill: null, logs: [], globalDamageTaken: { player: 0, ai: 0 }, soupHistory: {}, pendingRevive: [], extraActorUid: null, extraTurnFromCang: false
+  };
+  
+  state.sides.player.team = selectedOrder.map((id, i) => createChar(id, 'player', i));
+  state.sides.ai.team = aiOrder.map((id, i) => createChar(id, 'ai', i));
+  
+  buildOrder();
+  document.getElementById('log').innerHTML = '';
+  log(`游戏开始！先手：${state.firstSide === 'player' ? '玩家' : 'AI'}`);
+  
+  render();
+  startRound();
+  isStarting = false;
+}
+
+function createChar(id, side, pos) {
+  const t = TEMPLATES[id];
+  return {
+    uid: side + '-' + pos + '-' + id, id, side, pos, name: t.name, baseAtk: t.atk, atk: t.atk,
+    maxHp: t.maxHp, hp: t.maxHp, alive: true,
+    effects: { poison:0, duel:null, shield:0, domain:0, skipTurn:0, hope:0, blackRoom:0, blackRoomDmg:0, wan:0, fear:0, berserk:0, infinity:0, blackFlash:0, huaiMuHp:[], bigHuaiMu:null, blessing:0, offField:0, marked:false, xinYue:0 },
+    counters: { gDealt:0, gTaken:0, soupDmg:0, dunTaken:0, dunImmortalUsed:false, biSkills:0, luoShuaqi:0, jingCang:false, jingHe:false, jingUltUsed:false, jingCangChain:false, taoForm:0, taoRevived:0, taoTaken:0, lingDeadAlliesTracked:0, jianyunFragments:0, adminPrivilege:0, lastMarkedHp:0 },
+    lastPassiveRound: 0
+  };
+}
+
+function buildOrder() {
+  const f = state.firstSide, s = f === 'player' ? 'ai' : 'player';
+  state.order = [{side:f,pos:0},{side:s,pos:0},{side:f,pos:1},{side:s,pos:1},{side:f,pos:2},{side:s,pos:2}];
+}
+
+function addFragment(actor, amount) {
+  if (!actor || actor.id !== 'jianyun') return;
+  actor.counters.jianyunFragments = round1(actor.counters.jianyunFragments + amount);
+}
+
+/* ================== 核心驱动 ================== */
+function startRound() {
+  if (state.gameOver) return;
+  
+  const reviveList = [...state.pendingRevive];
+  state.pendingRevive = [];
+  reviveList.forEach(c => {
+    if (c.side && state.sides[c.side]) {
+      c.alive = true; c.hp = c.maxHp; c.atk = c.baseAtk;
+      c.effects = { poison:0, duel:null, shield:0, domain:0, skipTurn:0, hope:0, blackRoom:0, blackRoomDmg:0, wan:0, fear:0, berserk:0, infinity:0, blackFlash:0, huaiMuHp:[], bigHuaiMu:null, blessing:0, offField:0, marked:false, xinYue:0 };
+      log(`【复活】${displayName(c)} 复活`);
+    }
+  });
+
+  checkGameOver();
+  if (state.gameOver) return;
+
+  const all = state.sides.player.team.concat(state.sides.ai.team);
+  all.forEach(c => {
+    if (!c.alive) return;
+    
+    if (c.effects.domain > 0) { c.effects.domain--; if (c.effects.domain === 0) log(`${displayName(c)} 的领域结束`); }
+    if (c.effects.blackRoom > 0) {
+      c.effects.blackRoom--;
+      if (c.effects.blackRoom === 0) {
+        log(`${displayName(c)} 脱离小黑屋`);
+        const luo = all.find(x => x.id === 'luo' && x.side !== c.side);
+        if (luo) {
+          const heal = round1(c.effects.blackRoomDmg * 0.1);
+          state.sides[luo.side].team.forEach(a => { if(a.alive) a.hp = round1(Math.min(a.maxHp, a.hp + heal)); });
+          luo.counters.luoShuaqi += 5;
+          log(`${displayName(luo)} 积攒5点耍起，全队回血${heal}`);
+        }
+        c.effects.blackRoomDmg = 0;
+      }
+    }
+    if (c.effects.duel) {
+      c.effects.duel.rounds--;
+      if (c.effects.duel.rounds <= 0) { 
+        c.effects.duel = null; 
+        if (c.id === 'g') c.atk = round1(c.atk - 2);
+        log(`${displayName(c)} 退出决斗`); 
+      }
+    }
+    if (c.effects.blessing > 0) c.effects.blessing--;
+    if (c.effects.offField > 0) { c.effects.offField--; if (c.effects.offField===0) log(`${displayName(c)} 回到战场`); }
+  });
+
+  ['player', 'ai'].forEach(side => {
+    if (state.sides[side].errorHearts > 0) {
+      state.sides[side].errorHearts--;
+      if (state.sides[side].errorHearts === 0) log(`${side === 'player' ? '玩家' : 'AI'} 的『错误』心恢复正常`);
+    }
+  });
+
+  state.turnIndex = 0;
+  nextTurn();
+}
+
+function nextTurn() {
+  if (state.gameOver) return;
+  if (state.turnIndex >= state.order.length) {
+    state.round++;
+    log(`------ 第 ${state.round} 轮 ------`);
+    startRound();
+    return;
+  }
+  
+  const slot = state.order[state.turnIndex];
+  const actor = state.sides[slot.side].team[slot.pos];
+  
+  if (!actor || !actor.alive) { 
+    state.turnIndex++; 
+    setTimeout(nextTurn, 200);
+    return; 
+  }
+  
+  if (actor.effects.offField > 0) {
+    log(`${displayName(actor)} 处于离场状态，跳过回合`);
+    state.turnIndex++; setTimeout(nextTurn, 200); return;
+  }
+  
+  if (actor.effects.skipTurn > 0) {
+    actor.effects.skipTurn--;
+    log(`${displayName(actor)} 无法行动（放假中），跳过回合`);
+    state.turnIndex++; setTimeout(nextTurn, 200); return;
+  }
+
+  state.currentActor = actor;
+  beginTurn(actor, false);
+}
+
+function beginTurn(actor, isExtra) {
+  if (state.gameOver) return;
+  state.currentActor = actor;
+
+  if (!actor.alive || actor.effects.offField > 0 || actor.effects.skipTurn > 0) {
+    if (actor.effects.offField > 0) {
+      log(`${displayName(actor)} 处于离场状态，跳过额外回合`);
+    } else if (actor.effects.skipTurn > 0) {
+      actor.effects.skipTurn--;
+      log(`${displayName(actor)} 无法行动，跳过额外回合`);
+    } else {
+      log(`${displayName(actor)} 已死亡，跳过额外回合`);
+    }
+    
+    if (isExtra) {
+      finishTurn();
+    } else {
+      state.turnIndex++;
+      nextTurn();
+    }
+    return;
+  }
+
+  if (actor.id === 'jing') {
+    if (isExtra) {
+      actor.counters.jingCangChain = state.extraTurnFromCang;
+    } else {
+      actor.counters.jingCangChain = false;
+    }
+  }
+  
+  state.extraTurnFromCang = false;
+  state.pendingSkill = null;
+
+  log(`--- ${displayName(actor)} 回合${isExtra ? '（额外）' : ''} ---`);
+
+  processTurnStart(actor);
+
+  if (state.gameOver) return;
+
+  if (!actor.alive) {
+    if (isExtra) {
+      finishTurn();
+    } else {
+      state.turnIndex++;
+      nextTurn();
+    }
+    return;
+  }
+
+  state.currentActor = actor;
+  render();
+
+  if (actor.side === 'player') {
+    showPlayerActions();
+  } else {
+    setTimeout(() => aiAct(actor), 600);
+  }
+}
+
+function processTurnStart(actor) {
+  if (actor.effects.poison > 0) {
+    actor.effects.poison--;
+    dealDamage(null, actor, 6, 'direct', '毒化', { isAoe: true });
+  }
+  if (state.gameOver || !actor.alive) return;
+
+  // 只给自己阵营的剪云加碎片
+  const jianyunAlly = state.sides[actor.side].team.find(c => c.id === 'jianyun' && c.alive && c !== actor);
+  if (jianyunAlly) addFragment(jianyunAlly, 0.5);
+
+  if (actor.effects.xinYue > 0) {
+    actor.hp = round1(Math.min(actor.maxHp, actor.hp + 3));
+    log(`${displayName(actor)} 受到【新月盈满】回复3.0血`);
+    actor.effects.xinYue--;
+  }
+  
+  if (actor.id === 'soup') {
+    if (actor.lastPassiveRound === 0 || state.round - actor.lastPassiveRound >= 3) {
+      actor.lastPassiveRound = state.round;
+      state.sides[actor.side].team.forEach(c => {
+        if(c.alive) { c.hp = round1(Math.min(c.maxHp, c.hp + 4)); log(`${displayName(c)} 被鸡汤回复4.0血`); }
+      });
+    }
+  }
+
+  if (actor.id === 'jing') actor.hp = round1(Math.min(actor.maxHp, actor.hp + 2));
+  
+  if (actor.id === 'ling') {
+    const deadAllies = state.sides[actor.side].team.filter(c => !c.alive && c !== actor).length;
+    if (deadAllies > actor.counters.lingDeadAlliesTracked) {
+      const diff = deadAllies - actor.counters.lingDeadAlliesTracked;
+      actor.maxHp = round1(actor.maxHp + diff * 15);
+      actor.baseAtk = round1(actor.baseAtk + diff * 2);
+      actor.hp = round1(Math.min(actor.maxHp, actor.hp + diff * 6));
+      actor.counters.lingDeadAlliesTracked = deadAllies;
+      log(`【你们全都是棍木】${displayName(actor)} 队友阵亡，血上限+${round1(diff*15)}，攻击力+${round1(diff*2)}，回复6.0血`);
+    }
+
+    if (actor.effects.huaiMuHp.length > 0) {
+      actor.effects.huaiMuHp = actor.effects.huaiMuHp.map(hp => round1(Math.min(12, hp + 2)));
+      log(`【棍木】恢复2.0点HP`);
+    }
+    if (actor.effects.bigHuaiMu) {
+      actor.effects.bigHuaiMu.hp = round1(Math.min(36, actor.effects.bigHuaiMu.hp + 5));
+      log(`【巨大棍木】恢复5.0点HP`);
+    }
+    if (actor.effects.bigHuaiMu) actor.hp = round1(Math.min(actor.maxHp, actor.hp + 5));
+    else if (actor.effects.huaiMuHp.length > 0) {
+      const aliveAllies = state.sides[actor.side].team.filter(c => c.alive && c !== actor).length;
+      const healAmt = round1(actor.effects.huaiMuHp.length * (aliveAllies > 0 ? 1 : 2));
+      actor.hp = round1(Math.min(actor.maxHp, actor.hp + healAmt));
+    }
+    updateLingAtk(actor);
+  }
+
+  if (actor.id === 'tao') {
+    const allies = state.sides[actor.side].team.filter(c => c.alive && c !== actor);
+    if (allies.length > 0 && allies.every(c => c.hp < c.maxHp * 0.5) && actor.effects.berserk === 0) {
+      actor.effects.berserk = 2;
+      log(`【向死而生】触发！${displayName(actor)} 进入暴走状态`);
+      
+      allies.forEach(ally => {
+        if (ally.effects.poison > 0) { actor.effects.poison += ally.effects.poison; ally.effects.poison = 0; log(`【暴走】${displayName(actor)} 吸收了 ${displayName(ally)} 的毒化`); }
+        if (ally.effects.fear > 0) { actor.effects.fear += ally.effects.fear; ally.effects.fear = 0; log(`【暴走】${displayName(actor)} 吸收了 ${displayName(ally)} 的恐惧`); }
+        if (ally.effects.marked) { ally.effects.marked = false; actor.effects.marked = true; log(`【暴走】${displayName(actor)} 吸收了 ${displayName(ally)} 的『 』标记`); }
+        if (ally.effects.blackRoom > 0) { actor.effects.blackRoom = Math.max(actor.effects.blackRoom, ally.effects.blackRoom); ally.effects.blackRoom = 0; log(`【暴走】${displayName(actor)} 吸收了 ${displayName(ally)} 的小黑屋`); }
+      });
+    }
+    
+    if (actor.effects.berserk > 0) {
+      log(`【暴走】${displayName(actor)} 对敌方全体造成HP上限10%的伤害`);
+      getAoeTargets(actor).forEach(e => dealDamage(actor, e, round1(actor.maxHp * 0.1), 'direct', '暴走', { isAoe: true }));
+    }
+  }
+}
+
+function updateLingAtk(actor) {
+  if (actor.id !== 'ling') return;
+  const aliveAllies = state.sides[actor.side].team.filter(c => c.alive && c !== actor).length;
+  const numMu = actor.effects.huaiMuHp.length;
+  let bonus = 0;
+  if (aliveAllies > 0) bonus = numMu * 1;
+  else bonus = numMu * 2;
+  if (actor.effects.bigHuaiMu) bonus += 6;
+  actor.atk = round1(actor.baseAtk + bonus);
+}
+
+function finishTurn() {
+  const actor = state.currentActor;
+  if (actor) {
+    if (actor.effects.wan > 0) actor.effects.wan--;
+    if (actor.effects.berserk > 0) actor.effects.berserk--;
+  }
+  
+  state.currentActor = null;
+  state.pendingSkill = null;
+
+  if (state.extraActorUid) {
+    const target = findCharByUid(state.extraActorUid);
+    if (target && target.alive) {
+      state.extraActorUid = null;
+      log(`${displayName(target)} 获得额外行动！`);
+      beginTurn(target, true);
+      return;
+    }
+    state.extraActorUid = null;
+  }
+
+  state.turnIndex++;
+  nextTurn();
+}
+
+/* ================== 伤害结算 ================== */
+function dealDamage(source, target, amount, type='direct', skillName='', options = {}) {
+  if (!target || !target.alive || amount <= 0 || target.effects.offField > 0) return;
+  
+  if (source && source.id === 'tao' && type !== 'true') amount = round1(target.hp * 0.1);
+
+  let dmg = round1(amount);
+  
+  const jianyun = state.sides[target.side === 'player' ? 'ai' : 'player'].team.find(c => c.id === 'jianyun' && c.alive);
+  const jianyunAlly = state.sides[target.side].team.find(c => c.id === 'jianyun' && c.alive && c !== source && c !== target);
+  if (jianyun && source?.id !== 'jianyun') addFragment(jianyun, 0.5);
+  if (jianyunAlly && target.id !== 'jianyun') addFragment(jianyunAlly, 0.5);
+
+  if (source && source.effects.hope > 0 && target.side !== source.side) {
+    source.effects.hope--;
+    source.atk = round1(Math.max(0, source.atk - 2));
+    const luo = state.sides[source.side].team.find(c => c.id === 'luo' && c.alive);
+    if (luo) {
+      luo.counters.luoShuaqi = round1(luo.counters.luoShuaqi + 2);
+      log(`【希冀】${displayName(source)} 造成伤害，消耗1层希冀（攻击力-2）。${displayName(luo)} 积攒2.0点耍起`);
+    } else {
+      log(`【希冀】${displayName(source)} 造成伤害，消耗1层希冀（攻击力-2）`);
+    }
+  }
+
+  // ===== 真实伤害 =====
+  if (type === 'true') {
+    const tao = state.sides[target.side].team.find(c => c.id === 'tao' && c.alive && c.effects.berserk > 0);
+    // 决斗隔离：外部桃桃不能转移决斗中角色的伤害
+    if (tao && tao !== target && !isDuelProtected(tao, target)) {
+      const taoDmg = round1(dmg * 0.8);
+      const targetDmg = round1(dmg - taoDmg);
+
+      log(`【暴走】${displayName(tao)} 为 ${displayName(target)} 分担了 80% 的真实伤害 (${taoDmg})`);
+
+      target.hp = round1(target.hp - targetDmg);
+      log(`[真实伤害] ${source ? displayName(source) : '效果'} 对 ${displayName(target)} 造成 ${targetDmg} 点真实伤害 (${skillName})`);
+
+      tao.hp = round1(tao.hp - taoDmg);
+      log(`[真实伤害] ${source ? displayName(source) : '效果'} 对 ${displayName(tao)} 造成 ${taoDmg} 点真实伤害 (${skillName})`);
+
+      if (target.id === 'tao') target.counters.taoTaken = round1(target.counters.taoTaken + targetDmg);
+      if (tao.id === 'tao') tao.counters.taoTaken = round1(tao.counters.taoTaken + taoDmg);
+      state.globalDamageTaken[target.side] = round1((state.globalDamageTaken[target.side] || 0) + targetDmg + taoDmg);
+
+      if (target.effects.marked && source && source.id === 'jianyun' && skillName === '检索HP') {
+        dealDamage(source, target, 3, 'direct', '标记伤害');
+      }
+      if (target.effects.marked && source && source.id === 'jianyun' && skillName === '蝶火燎原') {
+        target.hp = round1(target.hp - 5);
+        log(`【『 』】触发，${displayName(target)} 额外受到 5.0 点真实伤害`);
+      }
+
+      if (target.hp <= 0) killCharacter(target, source);
+      if (tao.hp <= 0) killCharacter(tao, source);
+      return;
+    } else {
+      target.hp = round1(target.hp - dmg);
+      log(`[真实伤害] ${source ? displayName(source) : '效果'} 对 ${displayName(target)} 造成 ${dmg} 点真实伤害 (${skillName})`);
+
+      if (source && source.id === 'g') source.counters.gDealt = round1(source.counters.gDealt + dmg);
+      if (target.id === 'g') target.counters.gTaken = round1(target.counters.gTaken + dmg);
+      if (target.id === 'dun') target.counters.dunTaken = round1(target.counters.dunTaken + dmg);
+      if (target.id === 'tao') target.counters.taoTaken = round1(target.counters.taoTaken + dmg);
+      state.globalDamageTaken[target.side] = round1((state.globalDamageTaken[target.side] || 0) + dmg);
+
+      if (target.effects.marked && source && source.id === 'jianyun' && skillName === '检索HP') {
+        dealDamage(source, target, 3, 'direct', '标记伤害');
+      }
+      if (target.effects.marked && source && source.id === 'jianyun' && skillName === '蝶火燎原') {
+        target.hp = round1(target.hp - 5);
+        log(`【『 』】触发，${displayName(target)} 额外受到 5.0 点真实伤害`);
+      }
+
+      if (target.hp <= 0) killCharacter(target, source);
+      return;
+    }
+  }
+
+  // ===== 普通/直伤 =====
+  if (source && source.effects.blackFlash > 0) {
+    dmg = round1(dmg * 1.1); source.hp = round1(Math.min(source.maxHp, source.hp + 2)); source.effects.blackFlash--;
+  }
+  if (source && source.effects.wan > 0) dmg = round1(dmg + dmg * 0.2);
+  
+  if (target.effects.blackRoom > 0) dmg = round1(dmg * 1.1);
+  if (target.effects.fear > 0) dmg = round1(dmg * 0.5);
+
+  if (target.effects.domain > 0 && target.id === 'dun') dmg = round1(dmg * 0.85);
+  if (target.id === 'jing') dmg = round1(dmg * (1 - target.effects.infinity * 0.025));
+  if (target.effects.blessing > 0) dmg = round1(dmg * 0.9);
+  
+  const dunAlly = state.sides[target.side].team.find(c => c.id === 'dun' && c.alive);
+  if (dunAlly) dmg = round1(dmg * 0.95);
+
+  if (target.id === 'ling' && (target.effects.huaiMuHp.length > 0 || target.effects.bigHuaiMu)) {
+    dmg = round1(dmg * 0.95);
+  }
+
+  if (target.effects.shield > 0) {
+    const absorbed = round1(Math.min(target.effects.shield, dmg));
+    target.effects.shield = round1(target.effects.shield - absorbed); dmg = round1(dmg - absorbed);
+    if (absorbed > 0) log(`[护盾] ${displayName(target)} 吸收了 ${absorbed} 点伤害`);
+  }
+  if (dmg <= 0) return;
+  
+  if (target.id === 'dun' && target.effects.domain > 0) {
+    if (Math.random() < 0.10) { log(`【${displayName(target)}】触发免疫！`); return; }
+    if (Math.random() < 0.03 && source) { dealDamage(target, source, round1(amount * 0.5), 'direct', '反伤'); }
+  }
+
+  const tao = state.sides[target.side].team.find(c => c.id === 'tao' && c.alive && c.effects.berserk > 0);
+  // 决斗隔离：外部桃桃不能转移决斗中角色的伤害
+  if (tao && tao !== target && !isDuelProtected(tao, target)) {
+    const transfer = round1(dmg * 0.8);
+    dmg = round1(dmg - transfer);
+    log(`【暴走】${displayName(tao)} 为 ${displayName(target)} 承受了 ${transfer} 点伤害`);
+    dealDamage(source, tao, transfer, 'direct', '暴走转移');
+  }
+
+  if (target.id === 'ling') {
+    if (target.effects.huaiMuHp.length > 0) {
+      let absorbed = 0;
+      const isAoe = options.isAoe || false;
+      let hitCount = 0;
+
+      while (target.effects.huaiMuHp.length > 0 && dmg > 0) {
+        if (!isAoe && hitCount >= 1) break;
+
+        let hp = target.effects.huaiMuHp[0];
+        if (hp > dmg) {
+          target.effects.huaiMuHp[0] = round1(target.effects.huaiMuHp[0] - dmg);
+          absorbed = round1(absorbed + dmg); dmg = 0;
+          log(`【棍木】抵挡了 ${absorbed} 点伤害，当前棍木剩余血量：${target.effects.huaiMuHp.join(', ')}`);
+        } else {
+          absorbed = round1(absorbed + hp); dmg = round1(dmg - hp);
+          target.effects.huaiMuHp.shift();
+          hitCount++;
+          log(`【棍木】碎裂了一根，抵挡了 ${hp} 点伤害。`);
+          if (target.effects.huaiMuHp.length === 0) log(`【棍木】全部碎裂！`);
+        }
+      }
+      if (dmg > 0 && !isAoe && hitCount === 1) {
+        log(`[单体溢出] 溢出的 ${dmg} 点伤害直接作用于 ${displayName(target)}`);
+      }
+    } else if (target.effects.bigHuaiMu) {
+      let absorbed = round1(Math.min(target.effects.bigHuaiMu.hp, dmg));
+      target.effects.bigHuaiMu.hp = round1(target.effects.bigHuaiMu.hp - absorbed);
+      dmg = round1(dmg - absorbed);
+      if (absorbed > 0) log(`【巨大棍木】为 ${displayName(target)} 抵挡了 ${absorbed} 点伤害 (剩余HP:${target.effects.bigHuaiMu.hp})`);
+      if (target.effects.bigHuaiMu.hp <= 0) {
+        target.effects.bigHuaiMu = null;
+        log(`【巨大棍木】碎裂！`);
+      }
+    }
+    updateLingAtk(target);
+  }
+
+  if (dmg <= 0) { render(); return; }
+
+  target.hp = round1(target.hp - dmg);
+  log(`[伤害] ${source ? displayName(source) : '效果'} 对 ${displayName(target)} 造成 ${dmg} 点伤害 (${skillName})`);
+
+  if (source) {
+    if (source.id === 'g') source.counters.gDealt = round1(source.counters.gDealt + dmg);
+    if (source.id === 'soup' && type === 'direct') {
+      source.counters.soupDmg = round1(source.counters.soupDmg + dmg);
+      if (!state.soupHistory) state.soupHistory = {};
+      state.soupHistory[state.round] = round1((state.soupHistory[state.round] || 0) + dmg);
+    }
+  }
+  if (target.id === 'g') target.counters.gTaken = round1(target.counters.gTaken + dmg);
+  if (target.id === 'dun') target.counters.dunTaken = round1(target.counters.dunTaken + dmg);
+  if (target.id === 'tao') target.counters.taoTaken = round1(target.counters.taoTaken + dmg);
+  if (target.effects.blackRoom > 0) target.effects.blackRoomDmg = round1(target.effects.blackRoomDmg + dmg);
+  state.globalDamageTaken[target.side] = round1((state.globalDamageTaken[target.side] || 0) + dmg);
+
+  if (target.hp <= 0) killCharacter(target, source);
+}
+
+function killCharacter(target, killer, isTrueKill = false) {
+  if (!target.alive) return;
+
+  if (!isTrueKill) {
+    const dun = state.sides[target.side].team.find(c => c.id === 'dun' && c.alive);
+    if (dun && !dun.counters.dunImmortalUsed) {
+      dun.counters.dunImmortalUsed = true; target.hp = 1;
+      log(`【不动明王】${displayName(dun)} 为 ${displayName(target)} 抵挡了致命伤害！`);
+      return;
+    }
+  } else {
+    log(`【机制抹杀】${displayName(target)} 被直接判定死亡，无视一切免死与转移。`);
+  }
+
+  target.alive = false; target.hp = 0;
+  log(`${displayName(target)} 死亡！`);
+
+  if (target.id === 'tao' && target.effects.berserk > 0) {
+    const allies = state.sides[target.side].team.filter(c => c !== target && c.alive);
+    if (target.counters.taoRevived === 0) {
+      allies.forEach(a => a.hp = a.maxHp); target.counters.taoRevived = 1;
+      log(`【向死而生】${displayName(target)} 暴走死亡，队友全部满血！`);
+    } else {
+      allies.forEach(a => a.hp = round1(Math.min(a.maxHp, Math.max(a.hp, a.maxHp * 0.5))));
+      log(`【向死而生】${displayName(target)} 暴走死亡，队友恢复至50%血！`);
+    }
+  }
+
+  let isPermanentDeath = false;
+  if (target.id === 'bi') {
+    isPermanentDeath = true;
+    state.sides[target.side].team.forEach(c => {
+      if (c !== target && c.alive) { c.hp = round1(Math.min(c.maxHp, c.hp + 15)); c.baseAtk = round1(c.baseAtk + 4); c.atk = round1(c.atk + 4); }
+    });
+    state.sides[target.side].sp = Math.min(5, state.sides[target.side].sp + 5);
+    log(`【亡命之徒】${displayName(target)} 死亡，不扣心且无法复活，全队回15.0血，加4.0攻，回5点！`);
+  }
+
+  if (target.id === 'luo') {
+    state.sides[target.side].team.forEach(c => { if(c.alive) c.effects.blessing = 3; });
+    log(`【我相信你】${displayName(target)} 死亡，全队获得祝福减伤。`);
+  }
+
+  if (target.id === 'g' && target.effects.duel) {
+    const other = state.sides[target.effects.duel.side]?.team.find(c => c.uid === target.effects.duel.uid);
+    if (other && other.alive) {
+      other.atk = round1(Math.max(0, other.atk - 2));
+      log(`${displayName(target)} 被动【再来再来】触发：${displayName(other)} 攻击力降低2`);
+    }
+  }
+
+  if (target.effects.duel) {
+    const other = state.sides[target.effects.duel.side]?.team.find(c => c.uid === target.effects.duel.uid);
+    if (other) {
+      other.effects.duel = null;
+      if (other.id === 'g') other.atk = round1(other.atk - 2);
+    }
+    target.effects.duel = null;
+    if (target.id === 'g') target.atk = round1(target.atk - 2);
+  }
+
+  if (target.id === 'ling') {
+    isPermanentDeath = true;
+    log(`【你们全都是棍木】01 死后无法复活，且不扣心。`);
+  }
+
+  if (!isPermanentDeath) {
+    // 01 在场时，队友阵亡仍正常扣心，但不进入复活队列
+    const lingInTeam = (target.id !== 'ling')
+      ? state.sides[target.side].team.find(c => c.id === 'ling' && c.alive)
+      : null;
+
+    if (state.sides[target.side].hearts > 0) {
+      state.sides[target.side].hearts--;
+      if (lingInTeam) {
+        log(`${target.side === 'player' ? '玩家' : 'AI'} 消耗 1 颗心，剩余心：${state.sides[target.side].hearts}。${displayName(target)} 因 01 在场无法复活。`);
+      } else {
+        state.pendingRevive.push(target);
+        log(`${target.side === 'player' ? '玩家' : 'AI'} 消耗 1 颗心，剩余心：${state.sides[target.side].hearts}。${displayName(target)} 加入复活队列。`);
+      }
+    } else {
+      log(`${target.side === 'player' ? '玩家' : 'AI'} 的心已耗尽（0颗），${displayName(target)} 彻底死亡，无法复活。`);
+    }
+  }
+
+  checkGameOver();
+}
+
+function checkGameOver() {
+  if (state.gameOver) return;
+  
+  const pAlive = state.sides.player.team.filter(c => c.alive).length;
+  const aAlive = state.sides.ai.team.filter(c => c.alive).length;
+  
+  const pPending = state.pendingRevive.filter(c => c.side === 'player').length;
+  const aPending = state.pendingRevive.filter(c => c.side === 'ai').length;
+
+  if (pAlive === 0 && pPending === 0) {
+    state.gameOver = true; render();
+    document.getElementById('gameOverBanner').style.display = 'block';
+    document.getElementById('bannerTitle').textContent = '💀 失败';
+    document.getElementById('bannerSub').textContent = '玩家全员阵亡且无法复活。';
+  } else if (aAlive === 0 && aPending === 0) {
+    state.gameOver = true; render();
+    document.getElementById('gameOverBanner').style.display = 'block';
+    document.getElementById('bannerTitle').textContent = '🏆 胜利！';
+    document.getElementById('bannerSub').textContent = 'AI 全员阵亡且无法复活。';
+  }
+}
+
+/* ================== 技能目标与执行 ================== */
+function getAoeTargets(actor) {
+  const enemies = state.sides[actor.side === 'player' ? 'ai' : 'player'].team
+    .filter(c => c.alive && c.effects.offField === 0);
+  // 决斗中的人：AOE 也只能命中自己的决斗对手
+  if (actor.effects.duel) {
+    return enemies.filter(c => c.uid === actor.effects.duel.uid);
+  }
+  // 未在决斗中的人：AOE 不会波及正在决斗中的敌人
+  return enemies.filter(c => !c.effects.duel);
+}
+
+function getValidTargets(actor, skillKey) {
+  if (skillKey === 'tao_form1' || skillKey === 'tao_form2') return getAoeTargets(actor); 
+  
+  if (skillKey === 'jing_cang') {
+    let allTargets = state.sides.player.team.concat(state.sides.ai.team).filter(c => c.alive && c.effects.offField === 0);
+    if (actor.counters.jingCangChain) {
+      allTargets = allTargets.filter(c => c.side !== actor.side);
+    }
+    return allTargets;
+  }
+  
+  if (actor.id === 'jianyun' && actor.counters.adminPrivilege > 0) {
+    if (skillKey === 'basic') return getAoeTargets(actor);
+    if (skillKey === 's1') return state.sides[actor.side].team.filter(c => c.alive && c.effects.offField === 0);
+    if (skillKey === 's2') return state.sides[actor.side === 'player' ? 'ai' : 'player'].team.filter(c => c.alive && c.effects.offField === 0);
+    if (skillKey === 'ult') return [actor];
+  }
+
+  const t = TEMPLATES[actor.id].skills[skillKey.split('_')[0]] || {type:'single'};
+  
+  if (t.type === 'self' || (skillKey === 'ult' && ['tao','jing','ling','dun','jianyun'].includes(actor.id) && t.type !== 'ally')) return [actor];
+  if (t.type === 'aoe') return getAoeTargets(actor);
+  if (t.type === 'ally') return state.sides[actor.side].team.filter(c => c.alive && c.effects.offField === 0);
+  
+  const enemies = state.sides[actor.side === 'player' ? 'ai' : 'player'].team.filter(c => c.alive && c.effects.offField === 0);
+  if (actor.effects.duel) return enemies.filter(c => c.uid === actor.effects.duel.uid);
+  return enemies.filter(c => !c.effects.duel);
+}
+
+function executeSkill(actor, skillKey, target) {
+  if (state.gameOver || !actor.alive) return;
+  
+  const side = state.sides[actor.side];
+  const t = TEMPLATES[actor.id];
+  let skillName = t.skills[skillKey.split('_')[0]]?.name || skillKey;
+  if (skillKey === 'jing_cang') skillName = '苍';
+  if (skillKey === 'jing_he') skillName = '赫';
+  if (skillKey === 'tao_form1') skillName = '桃桃形态一';
+  if (skillKey === 'tao_form2') skillName = '桃桃形态二';
+  
+  if (actor.id === 'jianyun' && actor.counters.adminPrivilege > 0) {
+    if (skillKey === 'basic') skillName = '蝶火燎原';
+    if (skillKey === 's1') skillName = '新月盈满';
+    if (skillKey === 's2') skillName = '搬疾运厄';
+    if (skillKey === 'ult') skillName = '解放！';
+  }
+  
+  log(`${displayName(actor)} 使用【${skillName}】`);
+
+  if (skillKey === 'basic') {
+    if (!(actor.id === 'jianyun' && actor.counters.adminPrivilege > 0)) {
+      side.sp = Math.min(5, side.sp + 1);
+    }
+  }
+  else if (skillKey !== 'ult' && skillKey !== 'jing_he' && !skillKey.includes('tao_form') && !(actor.id==='jianyun' && actor.counters.adminPrivilege > 0)) {
+    side.sp = Math.max(0, side.sp - 1);
+  }
+  
+  if (actor.id === 'ling' && skillKey === 'basic' && actor.hp < actor.maxHp * 0.8 && actor.counters.lingExtraSpRound !== state.round) {
+    side.sp = Math.min(5, side.sp + 1); actor.counters.lingExtraSpRound = state.round;
+  }
+
+  if (actor.id === 'jianyun') {
+    if (actor.counters.adminPrivilege > 0) {
+      if (skillKey === 'basic') {
+        const enemies = getAoeTargets(actor);
+        const dmg = enemies.length > 0 ? round1(27 / enemies.length) : 0;
+        enemies.forEach(e => dealDamage(actor, e, dmg, 'true', skillName, {isAoe: true}));
+      } else if (skillKey === 's1') {
+        actor.counters.jianyunFragments = round1(actor.counters.jianyunFragments - 1);
+        side.team.forEach(c => { 
+          if (c.alive && !isDuelProtected(actor, c)) c.effects.xinYue = 3; 
+        });
+      } else if (skillKey === 's2') {
+        actor.counters.jianyunFragments = round1(actor.counters.jianyunFragments - 3);
+        if (target) { target.effects.offField = 2; log(`${displayName(target)} 被放逐离场2回合`); }
+      } else if (skillKey === 'ult') {
+        actor.counters.jianyunFragments = round1(actor.counters.jianyunFragments - 7);
+        state.sides[actor.side==='player'?'ai':'player'].errorHearts = 2;
+        state.sides[actor.side==='player'?'ai':'player'].hearts--;
+        log(`【解放！】污染了敌方一颗心！`);
+        const oppSide = actor.side==='player'?'ai':'player';
+        if (state.sides[oppSide].hearts <= 0) {
+           state.gameOver = true; render();
+           document.getElementById('gameOverBanner').style.display = 'block';
+           document.getElementById('bannerTitle').textContent = actor.side === 'player' ? '🏆 胜利！' : '💀 失败';
+           document.getElementById('bannerSub').textContent = `敌方心被污染耗尽。`;
+           return;
+        }
+      }
+    } else {
+      if (skillKey === 'basic') {
+        dealDamage(actor, target, 7, 'true', skillName);
+        addFragment(actor, 1);
+      } else if (skillKey === 's1') {
+        if (target) {
+          const maxLimit = target === actor ? 50 : target.maxHp;
+          target.hp = round1(Math.min(maxLimit, target.hp + 7));
+          log(`${displayName(target)} 回复7.0 HP`);
+        }
+        addFragment(actor, 1);
+      } else if (skillKey === 's2') {
+        dealDamage(actor, target, 3, 'direct', skillName);
+        state.sides.player.team.concat(state.sides.ai.team).forEach(c => c.effects.marked = false);
+        if (target) {
+          target.effects.marked = true;
+          log(`${displayName(target)} 被施加『 』标记`);
+        }
+      }
+    }
+  }
+  else if (actor.id === 'g') {
+    if (skillKey === 'basic') dealDamage(actor, target, actor.atk, 'direct', skillName);
+    else if (skillKey === 's1') {
+      // 先进决斗（挂状态 + ATK+2），再结算 50% 伤害
+      if (target) {
+        actor.effects.duel = {uid:target.uid, side:target.side, rounds:4}; 
+        target.effects.duel = {uid:actor.uid, side:actor.side, rounds:4}; 
+        actor.atk = round1(actor.atk + 2);
+        log(`${displayName(actor)} 与 ${displayName(target)} 进入决斗！G哥攻击力+2`);
+        dealDamage(actor, target, round1(actor.atk * 0.5), 'direct', skillName);
+      }
+    }
+    else if (skillKey === 's2') dealDamage(actor, target, round1(actor.atk * 1.2), 'direct', skillName);
+    else if (skillKey === 'ult') {
+      actor.counters.gDealt = 0; actor.counters.gTaken = 0; 
+      actor.hp = 5;
+      const targetHpBefore = target ? target.hp : 0;
+      dealDamage(actor, target, round1(actor.atk * 4.0), 'direct', skillName);
+      
+      if (target && !target.alive) {
+        const overkill = Math.max(0, round1(actor.atk * 4.0) - targetHpBefore);
+        if (overkill > 0) {
+          const splash = round1(overkill * 0.5);
+          const others = getAoeTargets(actor).filter(c => c.alive);
+          if (others.length > 0) {
+            log(`【燃尽了】溢出伤害 ${splash} 分摊给敌方全体`);
+            others.forEach(e => dealDamage(actor, e, splash, 'direct', '溢出伤害', {isAoe: true}));
+          }
+        }
+      }
+      
+      side.team.forEach(c => { if(c.alive) c.hp = round1(Math.min(c.maxHp, c.hp + 8)); });
+    }
+  }
+  else if (actor.id === 'soup') {
+    if (skillKey === 'basic') dealDamage(actor, target, actor.atk, 'direct', skillName);
+    else if (skillKey === 's1') {
+      getAoeTargets(actor).forEach(e => { dealDamage(actor, e, round1(actor.atk*0.5), 'direct', skillName, {isAoe: true}); if(e.alive) e.effects.poison = 3; });
+    }
+    else if (skillKey === 's2') dealDamage(actor, target, round1(actor.atk * 1.2), 'direct', skillName);
+    else if (skillKey === 'ult') {
+      actor.counters.soupDmg = 0;
+      let total = 0; for(let r=state.round-3; r<state.round; r++) total += (state.soupHistory?.[r]||0);
+      const per = round1((total*0.6) / (getAoeTargets(actor).length || 1));
+      getAoeTargets(actor).forEach(e => dealDamage(actor, e, per, 'direct', skillName, {isAoe: true}));
+    }
+  }
+  else if (actor.id === 'dun') {
+    if (skillKey === 'basic') dealDamage(actor, target, actor.atk, 'direct', skillName);
+    else if (skillKey === 's1') side.team.forEach(c => { if(c.alive) c.effects.shield = round1(c.effects.shield + 6); });
+    else if (skillKey === 's2') { actor.effects.domain = 3; side.team.forEach(c => { if(c.alive) c.effects.shield = round1(c.effects.shield + 1); }); }
+    else if (skillKey === 'ult') {
+      actor.counters.dunTaken = 0;
+      state.sides[actor.side==='player'?'ai':'player'].team.forEach(e => { 
+        if (e.alive && !isDuelProtected(actor, e)) { e.atk = actor.atk; e.baseAtk = actor.atk; } 
+      });
+      if(target) target.effects.shield = round1(target.effects.shield + 20);
+    }
+  }
+  else if (actor.id === 'bi') {
+    actor.counters.biSkills++;
+    if (skillKey === 'basic') getAoeTargets(actor).forEach(e => dealDamage(actor, e, actor.atk, 'direct', skillName, {isAoe: true}));
+    else if (skillKey === 's1') {
+      const r = Math.random();
+      if (r < 0.6) dealDamage(actor, target, round1(actor.atk * 2), 'direct', skillName);
+      else if (r < 0.8) dealDamage(actor, target, round1(actor.atk * 4), 'direct', skillName);
+      else if (r < 0.99 && target) { target.effects.skipTurn = 1; log(`${displayName(target)} 放假1轮`); }
+      else if (target) { target.effects.skipTurn = 7; log(`${displayName(target)} 放假7轮`); }
+      actor.hp = round1(Math.min(actor.maxHp, actor.hp + 8));
+    }
+    else if (skillKey === 's2') {
+      const sumAtk = side.team.reduce((sum, c) => sum + (c.alive?c.atk:0), 0);
+      getAoeTargets(actor).forEach(e => dealDamage(actor, e, round1(sumAtk * 1.6 / (getAoeTargets(actor).length||1)), 'direct', skillName, {isAoe: true}));
+    }
+    else if (skillKey === 'ult') {
+      if (target) {
+        log(`【神临】${displayName(actor)} 降下了机制抹杀！`);
+        target.hp = 0; 
+        killCharacter(target, actor, true); 
+      }
+      actor.hp = round1(Math.min(actor.maxHp, actor.hp + actor.maxHp * 0.8));
+      side.sp = Math.min(5, side.sp + 1);
+      actor.counters.biSkills = 0;
+    }
+  }
+  else if (actor.id === 'luo') {
+    if (skillKey === 'basic') getAoeTargets(actor).forEach(e => dealDamage(actor, e, round1(actor.atk*0.5), 'direct', skillName, {isAoe: true}));
+    else if (skillKey === 's1') { 
+      if (target && !isDuelProtected(actor, target)) {
+        target.atk = round1(target.atk - target.effects.hope * 2);
+        target.effects.hope = 2; 
+        target.atk = round1(target.atk + 4);
+        log(`${displayName(target)} 获得2层希冀（+4攻）`);
+      } else if (target) {
+        log(`${displayName(target)} 处于决斗中，希冀无法施加`);
+      }
+    }
+    else if (skillKey === 's2') {
+      dealDamage(actor, target, round1(actor.atk * 0.5), 'direct', skillName);
+      if(target && target.alive) { target.effects.blackRoom = 2; target.effects.blackRoomDmg = 0; }
+    }
+    else if (skillKey === 'ult') {
+      actor.counters.luoShuaqi -= 15;
+      if (target && !isDuelProtected(actor, target)) target.effects.wan = 2;
+    }
+  }
+  else if (actor.id === 'tao') {
+    if (skillKey === 'basic') dealDamage(actor, target, 1, 'direct', skillName);
+    else if (skillKey === 's1') { actor.hp = round1(Math.max(1, actor.hp-10)); side.team.forEach(c => { if(c.alive) c.hp = round1(Math.min(c.maxHp, c.hp + 15)); }); }
+    else if (skillKey === 's2') { 
+      actor.counters.taoForm = 1; 
+      render();
+      return;
+    } 
+    else if (skillKey === 'tao_form1') { 
+      actor.hp = round1(Math.max(1, actor.hp-10)); 
+      getAoeTargets(actor).forEach(e => dealDamage(actor, e, 5, 'true', skillName, {isAoe: true})); 
+      actor.counters.taoForm = 0;
+    }
+    else if (skillKey === 'tao_form2') { 
+      actor.hp = round1(Math.min(actor.maxHp, actor.hp + 15));
+      const targets = side.team.concat(getAoeTargets(actor)).filter(c => c !== actor && c.alive && !isDuelProtected(actor, c));
+      targets.forEach(c => dealDamage(null, c, 8, 'true', skillName, {isAoe: true})); 
+      actor.counters.taoForm = 0;
+    }
+    else if (skillKey === 'ult') {
+      actor.hp = 30;
+      state.globalDamageTaken[actor.side] = 0;
+      const oppSide = actor.side==='player'?'ai':'player';
+      const oppTeam = state.sides[oppSide].team;
+      if (oppTeam.some(e => e.alive && !isDuelProtected(actor, e))) {
+        state.sides[oppSide].sp = 0;
+      }
+      oppTeam.forEach(e => { if (e.alive && !isDuelProtected(actor, e)) e.effects.fear = 2; });
+    }
+  }
+  else if (actor.id === 'jing') {
+    if (skillKey === 'basic') { dealDamage(actor, target, actor.atk, 'direct', skillName); actor.effects.blackFlash = 1; }
+    else if (skillKey === 'jing_cang') {
+      if(target && target.side === actor.side) { 
+        actor.counters.jingCangChain = true; 
+        state.extraActorUid = target.uid;
+        state.extraTurnFromCang = true;
+        log(`【苍】使 ${displayName(target)} 立即行动`); 
+      }
+      else { 
+        getAoeTargets(actor).forEach(e => dealDamage(actor, e, round1(actor.atk*0.8), 'direct', skillName, {isAoe: true})); 
+      }
+      actor.counters.jingCang = true;
+    }
+    else if (skillKey === 'jing_he') {
+      actor.hp = round1(actor.hp - 2);
+      if (actor.hp <= 0) { killCharacter(actor, null); }
+      if (actor.alive) dealDamage(actor, target, round1(actor.atk*1.5), 'direct', skillName);
+      actor.counters.jingHe = true;
+      if (actor.alive) actor.effects.infinity = Math.min(6, actor.effects.infinity + 1);
+    }
+    else if (skillKey === 's2') {
+      dealDamage(actor, target, round1(actor.atk*2), 'direct', skillName);
+      getAoeTargets(actor).forEach(e => { if(e !== target) dealDamage(actor, e, actor.atk, 'direct', skillName, {isAoe: true}); });
+    }
+    else if (skillKey === 'ult') {
+      actor.counters.jingUltUsed = true;
+      state.sides[actor.side==='player'?'ai':'player'].team.forEach(e => { 
+        if(e.alive && !isDuelProtected(actor, e)) e.effects.skipTurn = 1; 
+      });
+      actor.effects.blackFlash = 2;
+      state.extraActorUid = actor.uid; 
+      state.extraTurnFromCang = false;
+      log(`${displayName(actor)} 获得额外回合`);
+    }
+  }
+  else if (actor.id === 'ling') {
+    if (skillKey === 'basic') { dealDamage(actor, target, actor.atk, 'direct', skillName); actor.hp = round1(Math.min(actor.maxHp, actor.hp + 5)); }
+    else if (skillKey === 's1') getAoeTargets(actor).forEach(e => dealDamage(actor, e, actor.atk, 'direct', skillName, {isAoe: true}));
+    else if (skillKey === 's2') {
+      let currentCount = actor.effects.huaiMuHp.length;
+      if (currentCount > 0) {
+        actor.effects.huaiMuHp = actor.effects.huaiMuHp.map(hp => round1(Math.min(12, hp + 4)));
+        log(`【小棍木来喽】为已存在棍木回复4.0 HP`);
+      }
+      while (actor.effects.huaiMuHp.length < 2) {
+        actor.effects.huaiMuHp.push(12);
+        log(`【小棍木来喽】召唤了一根满血棍木`);
+      }
+      updateLingAtk(actor);
+    }
+    else if (skillKey === 'ult') {
+      actor.effects.bigHuaiMu = { hp: 36 };
+      actor.maxHp = round1(actor.maxHp + 20); actor.hp = round1(actor.hp + 20);
+      updateLingAtk(actor);
+      log(`【槐木之主】召唤巨大棍木，${displayName(actor)} 获得强化！`);
+    }
+  }
+
+  if (actor.id === 'jianyun') {
+    if (skillKey === 'ult' && actor.counters.adminPrivilege === 0) {
+      actor.counters.jianyunFragments = round1(actor.counters.jianyunFragments - 7);
+      actor.counters.adminPrivilege = 1;
+      state.extraActorUid = actor.uid; 
+      state.extraTurnFromCang = false;
+      log(`${displayName(actor)} 获得管理员权限，立即行动！`);
+    } else if (actor.counters.adminPrivilege > 0) {
+      actor.counters.adminPrivilege = 0;
+    }
+    
+    const markedTarget = state.sides.player.team.concat(state.sides.ai.team).find(c => c.effects.marked && c.alive);
+    if (markedTarget && actor.counters.adminPrivilege === 0) {
+      const prevHp = actor.counters.lastMarkedHp || markedTarget.hp;
+      if (markedTarget.hp === prevHp) {
+        addFragment(actor, 1);
+        log(`【『 』】未受到血量变动，${displayName(actor)} 获得1.0权限碎片`);
+      }
+      actor.counters.lastMarkedHp = markedTarget.hp;
+    }
+  }
+
+  render();
+  if (!state.gameOver) finishTurn();
+}
+
+/* ================== 玩家/AI 交互 ================== */
+function showPlayerActions() {
+  const panel = document.getElementById('skillButtons');
+  panel.innerHTML = '';
+  const actor = state.currentActor;
+  if (!actor) return;
+  
+  if (actor.id === 'tao' && actor.counters.taoForm === 1) {
+    const b1 = document.createElement('button'); b1.textContent = '形态一：耗10血，敌全体5真伤'; b1.onclick = () => { actor.counters.taoForm=0; executeSkill(actor, 'tao_form1', null); }; panel.appendChild(b1);
+    const b2 = document.createElement('button'); b2.textContent = '形态二：回15血，他人受8伤'; b2.onclick = () => { actor.counters.taoForm=0; executeSkill(actor, 'tao_form2', null); }; panel.appendChild(b2);
+    return;
+  }
+  if (actor.id === 'jing' && state.pendingSkill === 'jing_s1') {
+    const b1 = document.createElement('button'); 
+    b1.textContent = actor.counters.jingCangChain ? '苍 (全体80%)' : '苍 (全体80%或友方再动)'; 
+    b1.disabled = state.sides[actor.side].sp < 1;
+    b1.onclick = () => { state.pendingSkill=null; promptTarget(actor, 'jing_cang'); }; 
+    panel.appendChild(b1);
+    
+    const b2 = document.createElement('button'); b2.textContent = '赫 (单体150%)'; 
+    b2.onclick = () => { state.pendingSkill=null; promptTarget(actor, 'jing_he'); }; 
+    panel.appendChild(b2);
+    
+    const b3 = document.createElement('button'); b3.textContent = '取消'; b3.onclick = () => { state.pendingSkill=null; showPlayerActions(); }; panel.appendChild(b3);
+    return;
+  }
+
+  const skills = [];
+  
+  if (actor.id === 'jianyun' && actor.counters.adminPrivilege > 0) {
+    skills.push({ key: 'basic', label: '强化普攻 蝶火燎原 (27均摊)' });
+    skills.push({ key: 's1', label: '强化一技能 新月盈满 (耗1碎片)', disabled: actor.counters.jianyunFragments < 1 });
+    skills.push({ key: 's2', label: '强化二技能 搬疾运厄 (耗3碎片)', disabled: actor.counters.jianyunFragments < 3 });
+    skills.push({ key: 'ult', label: '强化大招 解放！(耗7碎片)', disabled: actor.counters.jianyunFragments < 7 });
+  } else {
+    skills.push({ key: 'basic', label: '普攻(+1点)' });
+    
+    const canS1 = state.sides[actor.side].sp >= 1 && !(actor.id==='g'&&actor.effects.duel);
+    if (actor.id === 'jing') skills.push({ key: 's1', label: '一技能 苍/赫' });
+    else skills.push({ key: 's1', label: `一技能 ${TEMPLATES[actor.id].skills.s1.name}`, disabled: !canS1 });
+    
+    if (actor.id === 'jing') skills.push({ key: 's2', label: '二技能 虚式·茈', disabled: !(actor.counters.jingCang && actor.counters.jingHe && state.sides[actor.side].sp >= 2) });
+    else skills.push({ key: 's2', label: `二技能 ${TEMPLATES[actor.id].skills.s2.name}`, disabled: state.sides[actor.side].sp < 1 });
+
+    let ultUsable = false;
+    if (actor.id === 'g') ultUsable = actor.counters.gDealt >= 72 || actor.counters.gTaken >= 64;
+    if (actor.id === 'soup') ultUsable = actor.counters.soupDmg >= 70;
+    if (actor.id === 'dun') ultUsable = actor.counters.dunTaken >= 120;
+    if (actor.id === 'bi') ultUsable = actor.counters.biSkills >= 5;
+    if (actor.id === 'luo') ultUsable = actor.counters.luoShuaqi >= 15;
+    if (actor.id === 'tao') ultUsable = state.globalDamageTaken[actor.side] >= 91;
+    if (actor.id === 'jing') ultUsable = !actor.counters.jingUltUsed;
+    if (actor.id === 'ling') ultUsable = state.sides[actor.side].team.filter(c=>c.alive).length === 1;
+    if (actor.id === 'jianyun') ultUsable = actor.counters.jianyunFragments >= 7;
+    skills.push({ key: 'ult', label: `大招 ${TEMPLATES[actor.id].skills.ult.name}`, disabled: !ultUsable });
+  }
+
+  skills.forEach(sk => {
+    const btn = document.createElement('button');
+    btn.textContent = sk.label; btn.disabled = sk.disabled;
+    btn.onclick = () => { 
+      if (sk.key === 's1' && actor.id === 'jing') { state.pendingSkill = 'jing_s1'; render(); } 
+      else promptTarget(actor, sk.key); 
+    };
+    panel.appendChild(btn);
+  });
+}
+
+function promptTarget(actor, skillKey) {
+  if (actor.id === 'tao' && skillKey === 's2') {
+    executeSkill(actor, skillKey, null);
+    return;
+  }
+
+  const t = TEMPLATES[actor.id].skills[skillKey.split('_')[0]];
+  if (t && t.type === 'self' && skillKey !== 'jing_s1') {
+    executeSkill(actor, skillKey, actor);
+    return;
+  }
+
+  const valid = getValidTargets(actor, skillKey);
+  if (valid.length === 0) { executeSkill(actor, skillKey, null); return; }
+  if (valid.length === 1 && !['ult', 's1'].includes(skillKey) && skillKey !== 'jing_cang') { executeSkill(actor, skillKey, valid[0]); return; }
+  
+  state.pendingSkill = { actor, skillKey };
+  document.getElementById('targetHint').textContent = '请点击目标（或点击返回取消）';
+  render();
+}
+
+function onTargetClick(target) {
+  const p = state.pendingSkill;
+  if (!p || typeof p !== 'object') return;
+  if (!getValidTargets(p.actor, p.skillKey).some(t => t.uid === target.uid)) return;
+  state.pendingSkill = null; document.getElementById('targetHint').textContent = '';
+  executeSkill(p.actor, p.skillKey, target);
+}
+
+function aiAct(actor) {
+  const side = state.sides[actor.side];
+  const skills = [];
+  
+  if (actor.id === 'jianyun' && actor.counters.adminPrivilege > 0) {
+    if (actor.counters.jianyunFragments >= 7) skills.push('ult');
+    if (actor.counters.jianyunFragments >= 3) skills.push('s2');
+    if (actor.counters.jianyunFragments >= 1) skills.push('s1');
+    skills.push('basic');
+  } else {
+    if (side.sp >= 1 && !(actor.id==='g'&&actor.effects.duel)) skills.push('s1');
+    if (side.sp >= 1) skills.push('s2');
+    if (side.sp >= 2 && actor.id==='jing' && actor.counters.jingCang && actor.counters.jingHe) skills.push('s2');
+    skills.push('basic');
+  }
+  
+  let sk = skills[Math.floor(Math.random() * skills.length)] || 'basic';
+  
+  let canUlt = false;
+  if (actor.id === 'g') canUlt = actor.counters.gDealt >= 72 || actor.counters.gTaken >= 64;
+  if (actor.id === 'soup') canUlt = actor.counters.soupDmg >= 70;
+  if (actor.id === 'dun') canUlt = actor.counters.dunTaken >= 120;
+  if (actor.id === 'bi') canUlt = actor.counters.biSkills >= 5;
+  if (actor.id === 'luo') canUlt = actor.counters.luoShuaqi >= 15;
+  if (actor.id === 'tao') canUlt = state.globalDamageTaken[actor.side] >= 91;
+  if (actor.id === 'jing') canUlt = !actor.counters.jingUltUsed;
+  if (actor.id === 'ling') canUlt = side.team.filter(c=>c.alive).length === 1;
+  if (actor.id === 'jianyun') canUlt = actor.counters.jianyunFragments >= 7;
+  
+  if (canUlt && Math.random() < 0.8) sk = 'ult';
+  if (actor.id === 'jing' && sk === 's1') sk = Math.random() < 0.5 ? 'jing_cang' : 'jing_he';
+  if (actor.id === 'tao' && sk === 's2') sk = Math.random() < 0.5 ? 'tao_form1' : 'tao_form2';
+  
+  let target = null;
+  const t = TEMPLATES[actor.id].skills[sk.split('_')[0]];
+  if (t && t.type === 'self') {
+    executeSkill(actor, sk, actor);
+    return;
+  }
+
+  const valid = getValidTargets(actor, sk);
+  if (valid.length > 0) {
+    const tType = TEMPLATES[actor.id].skills[sk.split('_')[0]]?.type;
+    if (tType === 'ally' || (sk === 'jing_cang' && Math.random() < 0.3) || sk === 's1') {
+       target = valid.sort((a,b) => b.atk - a.atk)[0];
+    } else {
+       target = valid.sort((a,b) => a.hp - b.hp)[0];
+    }
+  }
+  
+  executeSkill(actor, sk, target);
+}
+
+/* ================== 渲染 ================== */
+function render() {
+  document.getElementById('round').textContent = state.round;
+  document.getElementById('currentActor').textContent = state.currentActor ? displayName(state.currentActor) : '-';
+  document.getElementById('pSP').textContent = state.sides.player.sp;
+  document.getElementById('aSP').textContent = state.sides.ai.sp;
+  document.getElementById('pHearts').textContent = state.sides.player.hearts;
+  document.getElementById('aHearts').textContent = state.sides.ai.hearts;
+  document.getElementById('pError').textContent = state.sides.player.errorHearts > 0 ? `(其中${state.sides.player.errorHearts}颗『错误』)` : '';
+  document.getElementById('aError').textContent = state.sides.ai.errorHearts > 0 ? `(其中${state.sides.ai.errorHearts}颗『错误』)` : '';
+
+  renderTeam('player');
+  renderTeam('ai');
+
+  const panel = document.getElementById('skillButtons');
+  panel.innerHTML = '';
+
+  if (state.gameOver) return;
+  if (!state.currentActor || state.currentActor.side !== 'player') return;
+
+  // 目标选择中：显示返回键，防止误点
+  if (state.pendingSkill && typeof state.pendingSkill === 'object') {
+    const backBtn = document.createElement('button');
+    backBtn.textContent = '← 返回（取消选择）';
+    backBtn.style.background = '#6a2a2a';
+    backBtn.style.padding = '10px 16px';
+    backBtn.style.fontSize = '14px';
+    backBtn.style.fontWeight = 'bold';
+    backBtn.onclick = () => {
+      state.pendingSkill = null;
+      document.getElementById('targetHint').textContent = '';
+      render();
+    };
+    panel.appendChild(backBtn);
+  } else {
+    showPlayerActions();
+  }
+}
+
+function renderTeam(side) {
+  const el = document.getElementById(side + 'Team');
+  el.innerHTML = '';
+  state.sides[side].team.forEach(c => {
+    const div = document.createElement('div');
+    div.className = `battle-card ${side} ${state.currentActor===c?'active':''} ${!c.alive||c.effects.offField>0?'dead':''}`;
+    
+    if (state.pendingSkill && typeof state.pendingSkill === 'object') {
+      if (getValidTargets(state.pendingSkill.actor, state.pendingSkill.skillKey).some(t=>t.uid===c.uid)) {
+        div.classList.add('selectable');
+      }
+    }
+    
+    div.onclick = () => onTargetClick(c);
+    
+    const e = c.effects;
+    let b = [];
+    if(e.poison>0) b.push(`毒化${e.poison}`);
+    if(e.shield>0) b.push(`盾${e.shield}`);
+    if(e.skipTurn>0) b.push(`放假${e.skipTurn}`);
+    if(e.domain>0) b.push(`领域${e.domain}`);
+    if(e.hope>0) b.push(`希冀${e.hope}`);
+    if(e.blackRoom>0) b.push(`小黑屋${e.blackRoom}`);
+    if(e.wan>0) b.push(`我也要玩${e.wan}`);
+    if(e.fear>0) b.push(`恐惧${e.fear}`);
+    if(e.berserk>0) b.push(`暴走`);
+    if(e.infinity>0) b.push(`无下限${e.infinity}`);
+    if(e.blackFlash>0) b.push(`黑闪${e.blackFlash}`);
+    if(e.bigHuaiMu) b.push(`大棍木(HP:${e.bigHuaiMu.hp})`);
+    if(e.huaiMuHp && e.huaiMuHp.length > 0) b.push(`棍木x${e.huaiMuHp.length}(HP:${e.huaiMuHp.join(',')})`);
+    if(c.effects.duel) b.push('决斗');
+    if(e.blessing>0) b.push(`祝福${e.blessing}`);
+    if(e.offField>0) b.push(`离场${e.offField}`);
+    if(e.marked) b.push(`『 』标记`);
+    if(e.xinYue>0) b.push(`新月盈满${e.xinYue}`);
+    if(c.counters.adminPrivilege>0) b.push(`管理员权限`);
+    
+    let extra = '';
+    if(c.id==='g') extra = `大招: ${c.counters.gDealt}/72 或 ${c.counters.gTaken}/64`;
+    if(c.id==='soup') extra = `大招: ${c.counters.soupDmg}/70`;
+    if(c.id==='dun') extra = `受击: ${c.counters.dunTaken}/120`;
+    if(c.id==='bi') extra = `技能次数: ${c.counters.biSkills}`;
+    if(c.id==='luo') extra = `耍起: ${c.counters.luoShuaqi}/15`;
+    if(c.id==='tao') extra = `受击: ${state.globalDamageTaken[side]}/91`;
+    if(c.id==='jianyun') extra = `碎片: ${c.counters.jianyunFragments}`;
+
+    div.innerHTML = `
+      <div style="display:flex; justify-content:space-between;">
+        <b>${c.name} (${c.pos+1}号位)</b>
+        <span>ATK: ${c.id==='tao'||c.id==='jianyun'?'动态':c.atk}</span>
+      </div>
+      <div class="hp-bar"><div class="hp-fill" style="width:${Math.max(0,(c.hp/c.maxHp)*100)}%"></div></div>
+      <div>HP: ${c.hp}/${c.maxHp}</div>
+      <div class="buffs">${b.join(' | ')}</div>
+      <div style="color:#7fd4ff; font-size:11px; margin-top:4px;">${extra}</div>
+    `;
+    el.appendChild(div);
+  });
+}
+
+/* ================== 日志系统 ================== */
+function displayName(c) {
+  if (!c) return '系统';
+  return `【${c.side === 'player' ? '玩家' : 'AI'}】${c.name}`;
+}
+
+function log(msg) {
+  state.logs.push(msg);
+  const el = document.getElementById('log');
+  const p = document.createElement('div');
+  let html = msg
+    .replace(/【玩家】([^ \n]+)/g, '<span style="color:#4a9eff; font-weight:bold;">【玩家】$1</span>')
+    .replace(/【AI】([^ \n]+)/g, '<span style="color:#ff5c5c; font-weight:bold;">【AI】$1</span>');
+  p.innerHTML = html;
+  el.appendChild(p); el.scrollTop = el.scrollHeight;
+}
+
+// 初始化
+renderPool(); updateStartBtn();
+</script>
+</body>
+</html>

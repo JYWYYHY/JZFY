@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>机制验证</title></head>
+<body>
+<script src="core/character-registry.js"></script>
+<script src="core/character.js"></script>
+<script src="core/effect-handlers.js"></script>
+<script src="core/battle-core.js"></script>
+<script src="characters/bichunhan.js"></script>
+<script src="characters/luokong.js"></script>
+<script>
+function newCore() {
+    const c = new BattleCore();
+    c.setSeed(1);
+    c.onLog = (l) => console.log(`[${l.type}] ${l.msg}`);
+    return c;
+}
+
+window.v = {
+    // 场景 1：落空单技能验证
+    testLuokongBasic() {
+        const c = newCore();
+        c.init(["落空"], ["闭春寒"]);
+        const luo = c.teamA.chars[0];
+        console.log("初始 ATK:", luo.atk);
+        c.executeAction(luo, "basic", null);
+        console.log("普攻后伤害:", luo.stats.totalDmg);
+    },
+
+    testLuokongXiJi() {
+        const c = newCore();
+        c.init(["落空"], ["闭春寒"]);
+        const luo = c.teamA.chars[0];
+        c.executeAction(luo, "s1", luo);
+        console.log("希冀后：stacks=", luo.xiJiStacks, "atk=", luo.atk);
+    },
+
+    testLuokongXiJiConsume() {
+        const c = newCore();
+        c.init(["落空"], ["闭春寒"]);
+        const luo = c.teamA.chars[0];
+        c.executeAction(luo, "s1", luo);  // 加 2 层
+        c.executeAction(luo, "basic", null);  // 普攻消耗
+        console.log("普攻后：stacks=", luo.xiJiStacks, "atk=", luo.atk);
+    },
+
+    // 场景 2：闭春寒验证
+    testBiDamage() {
+        const c = newCore();
+        c.init(["闭春寒"], ["闭春寒"]);
+        const bi = c.teamA.chars[0];
+        c.executeAction(bi, "basic", null);
+        console.log("普攻后伤害:", bi.stats.totalDmg);
+    },
+
+    testBiUlt() {
+        const c = newCore();
+        c.init(["闭春寒"], ["闭春寒"]);
+        const bi = c.teamA.chars[0];
+        // 手动加 5 次技能计数
+        bi.biSkills = 5;
+        const target = c.teamB.chars[0];
+        c.executeAction(bi, "ult", target);
+        console.log("神临后：target.isDead =", target.isDead);
+    },
+
+    testBiDeath() {
+        const c = newCore();
+        c.init(["闭春寒"], ["闭春寒"]);
+        const bi = c.teamA.chars[0];
+        bi.hp = 0;
+        c.handleDeath(bi, c.teamA, null, "测试");
+        console.log("死后：hearts =", c.teamA.hearts, "reviveRound =", bi.reviveRound);
+        // 预期 hearts=5（不扣），reviveRound=0（不复活）
+    }
+};
+</script>
+</body>
+</html>

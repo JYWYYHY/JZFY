@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Core 测试</title>
+<style>
+    body { font-family: monospace; background: #12121a; color: #eee; padding: 20px; }
+    button { padding: 8px 16px; margin: 5px; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #388e3c; }
+    #log { background: #000; padding: 10px; height: 500px; overflow-y: auto; border-radius: 4px; font-size: 13px; margin-top: 10px; }
+    .log-system { color: #888; }
+    .log-dmg { color: #ff5c5c; }
+    .log-heal { color: #4caf50; }
+    .log-death { color: #ff9800; }
+    .log-special { color: #e91e63; }
+    .log-buff { color: #2196f3; }
+    #stats { background: #1c1c2c; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 13px; }
+</style>
+</head>
+<body>
+    <h1>Core 测试</h1>
+
+    <div style="background: #1c1c2c; padding: 12px; border-radius: 6px; margin-bottom: 12px;">
+        <label>A 方:
+            <select id="selA1"></select>
+            <select id="selA2"></select>
+            <select id="selA3"></select>
+        </label>
+        &nbsp;&nbsp;
+        <label>B 方:
+            <select id="selB1"></select>
+            <select id="selB2"></select>
+            <select id="selB3"></select>
+        </label>
+        &nbsp;&nbsp;
+        <label>种子: <input type="number" id="seedInput" value="42" style="width: 80px;"></label>
+        <button onclick="runBattle(parseInt(document.getElementById('seedInput').value))">单局</button>
+        <button onclick="runBatch(100, parseInt(document.getElementById('seedInput').value))">批量 100 场</button>
+    </div>
+
+    <div id="log" style="background: #000; padding: 10px; height: 500px; overflow-y: auto; border-radius: 4px; font-size: 13px;"></div>
+    <div id="stats" style="background: #1c1c2c; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 13px;"></div>
+
+<script src="core/character-registry.js"></script>
+<script src="core/character.js"></script>
+<script src="core/effect-handlers.js"></script>
+<script src="core/battle-core.js"></script>
+<script src="characters/bichunhan.js"></script>
+<script src="characters/luokong.js"></script>
+<script>
+    // 初始化下拉框
+    function initSelectors() {
+        const all = CharacterRegistry.all();
+        ["selA1","selA2","selA3","selB1","selB2","selB3"].forEach(id => {
+            const sel = document.getElementById(id);
+            sel.innerHTML = "";
+            all.forEach(def => {
+                const opt = document.createElement("option");
+                opt.value = def.id;
+                opt.text = def.name;
+                sel.appendChild(opt);
+            });
+        });
+        // 默认：A=[落空,闭春寒,闭春寒] B=[闭春寒,闭春寒,闭春寒]
+        document.getElementById("selA1").value = "luokong";
+        document.getElementById("selA2").value = "bichunhan";
+        document.getElementById("selA3").value = "bichunhan";
+        document.getElementById("selB1").value = "bichunhan";
+        document.getElementById("selB2").value = "bichunhan";
+        document.getElementById("selB3").value = "bichunhan";
+    }
+
+    function getTeamNames(prefix) {
+        return [1,2,3].map(i => {
+            const id = document.getElementById(`sel${prefix}${i}`).value;
+            return CharacterRegistry.get(id).name;
+        });
+    }
+
+    function logToUI({ msg, type }) {
+        const el = document.getElementById('log');
+        const p = document.createElement('div');
+        p.className = `log-${type || 'info'}`;
+        p.textContent = msg;
+        el.appendChild(p);
+        el.scrollTop = el.scrollHeight;
+    }
+
+    // 简单 AI
+function aiChoose(core, actor) {
+    const myTeam = core.getTeamOf(actor);
+    const enemyTeam = core.getOpposingTeam(myTeam);
+
+    if (core.canUseUltimate(actor, myTeam, enemyTeam)) {
+        const ultSkill = actor.skills.find(s => s.isUltimate);
+        const ultType = ultSkill?.targetType || "single";
+        let target = null;
+        if (ultType === "ally" || ultType === "allyTeam") {
+            target = myTeam.getAliveChars().sort((a, b) => a.hp - b.hp)[0];
+        } else if (ultType === "single" || ultType === "lowestEnemy") {
+            target = enemyTeam.getAliveChars().sort((a, b) => a.hp - b.hp)[0];
+        } else if (ultType === "highestEnemy") {
+            target = enemyTeam.getAliveChars().sort((a, b) => b.hp - a.hp)[0];
+        }
+        return { skillKey: "ult", target };
+    }
+
+    if (myTeam.skillPoints >= 1) {
+        const roll = core.random();
+        const skillKey = roll > 0.4 ? "s1" : "s2";
+        const skillDef = actor.skills.find(s => s.key === skillKey);
+        const targetType = skillDef?.targetType || "single";
+
+        let target = null;
+        if (targetType === "ally" || targetType === "allyTeam") {
+            target = myTeam.getAliveChars().sort((a, b) => a.hp - b.hp)[0];
+        } else if (targetType === "single" || targetType === "lowestEnemy") {
+            target = enemyTeam.getAliveChars().sort((a, b) => a.hp - b.hp)[0];
+        } else if (targetType === "highestEnemy") {
+            target = enemyTeam.getAliveChars().sort((a, b) => b.hp - a.hp)[0];
+        }
+        return { skillKey, target };
+    }
+
+    return { skillKey: "basic", target: null };
+}
+
+    function runBattle(seed) {
+        document.getElementById('log').innerHTML = '';
+        document.getElementById('stats').innerHTML = '';
+
+        const core = new BattleCore();
+        core.setSeed(seed);
+        core.onLog = logToUI;
+        core.init(getTeamNames("A"), getTeamNames("B"));
+
+        core.on("end", (result) => {
+            document.getElementById('stats').innerHTML =
+                `<b>结果：</b>${result.winner === "A" ? "A方胜" : result.winner === "B" ? "B方胜" : "平局"}<br>` +
+                `<b>原因：</b>${result.reason}<br>` +
+                `<b>回合数：</b>${result.rounds}<br>` +
+                `<b>A方心数：</b>${core.teamA.hearts}  <b>B方心数：</b>${core.teamB.hearts}`;
+        });
+
+        let safety = 0;
+        while (!core.isEnded && safety < 999) {
+            const actor = core.getNextActor();
+            if (!actor) {
+                core.nextRound();
+                if (core.isEnded) break;
+                continue;
+            }
+
+            core.beginTurn(actor);
+            if (actor.isDead) { core.endTurn(actor); continue; }
+            if (actor.cannotAct > 0) { actor.cannotAct--; core.endTurn(actor); continue; }
+
+            const choice = aiChoose(core, actor);
+            core.executeAction(actor, choice.skillKey, choice.target);
+            core.endTurn(actor);
+            safety++;
+        }
+
+        // 输出统计
+        const statsHtml = ["A", "B"].map(side => {
+            const team = core.getTeamOf(side);
+            const rows = team.chars.map(c =>
+                `${c.name}: 伤害 ${c.stats.totalDmg}, 死亡 ${c.stats.deaths}, 大招 ${c.stats.ults}`
+            ).join("<br>");
+            return `<b>${side} 方</b>（心数 ${team.hearts}）<br>${rows}`;
+        }).join("<br><br>");
+
+        document.getElementById('stats').innerHTML += `<hr><b>角色统计：</b><br>${statsHtml}`;
+    }
+
+    function runBatch(n, baseSeed) {
+    const results = { A: 0, B: 0, draw: 0, totalRounds: 0, notFinished: 0 };
+    const namesA = getTeamNames("A");
+    const namesB = getTeamNames("B");
+
+    for (let i = 0; i < n; i++) {
+        const c = new BattleCore();
+        c.setSeed((baseSeed || 0) + i);
+        c.init(namesA, namesB);
+
+        let safety = 0;
+        while (!c.isEnded && safety < 999) {
+            const actor = c.getNextActor();
+            if (!actor) {
+                c.nextRound();
+                if (c.isEnded) break;
+                continue;
+            }
+            c.beginTurn(actor);
+            if (actor.isDead) { c.endTurn(actor); continue; }
+            if (actor.cannotAct > 0) { actor.cannotAct--; c.endTurn(actor); continue; }
+
+            const choice = aiChoose(c, actor);
+            c.executeAction(actor, choice.skillKey, choice.target);
+            c.endTurn(actor);
+            safety++;
+        }
+
+        if (!c.result) {
+            results.notFinished++;
+            console.warn(`[未结束] 第 ${i} 场（种子 ${(baseSeed || 0) + i}），round=${c.round}，safety=${safety}`);
+        } else if (c.result.winner === "A") {
+            results.A++;
+        } else if (c.result.winner === "B") {
+            results.B++;
+        } else {
+            results.draw++;
+        }
+        if (c.result) results.totalRounds += c.result.rounds;
+    }
+
+    const finished = n - results.notFinished;
+    document.getElementById('stats').innerHTML =
+        `<b>批量 ${n} 场：</b><br>` +
+        `A 胜：${results.A} (${(results.A / n * 100).toFixed(1)}%)<br>` +
+        `B 胜：${results.B} (${(results.B / n * 100).toFixed(1)}%)<br>` +
+        `平局：${results.draw} (${(results.draw / n * 100).toFixed(1)}%)<br>` +
+        `未结束：${results.notFinished} (${(results.notFinished / n * 100).toFixed(1)}%)<br>` +
+        `平均回合（已完成 ${finished} 场）：${finished > 0 ? (results.totalRounds / finished).toFixed(1) : "N/A"}`;
+}
+
+    initSelectors();
+</script>
+</body>
+</html>
